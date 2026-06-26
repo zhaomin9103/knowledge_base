@@ -1,73 +1,126 @@
-# React + TypeScript + Vite
+# Agent Platform - 知识库管理系统
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+基于 React + TypeScript + Vite 构建的现代化知识库管理平台。
 
-Currently, two official plugins are available:
+## 功能特性
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+- 📚 知识库管理
+- 👥 成员权限管理
+- 📝 文档版本控制
+- ✅ 审核流程管理
+- 🔍 操作日志追踪
 
-## React Compiler
+## 技术栈
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+- **前端框架**: React 19 + TypeScript 6
+- **构建工具**: Vite 8
+- **UI 组件**: Radix UI + Tailwind CSS 4
+- **路由**: React Router v7
+- **图标**: Lucide React
 
-## Expanding the ESLint configuration
+## 快速开始
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+### 安装依赖
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm install
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+### 本地开发
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm run dev
 ```
+
+项目将在 `http://localhost:5173` 启动。
+
+### 构建生产版本
+
+```bash
+npm run build
+```
+
+构建输出目录：`dist/`
+
+### 代码检查
+
+```bash
+npm run lint
+```
+
+## 部署
+
+### Netlify 部署（推荐）
+
+详细部署步骤请查看 [DEPLOYMENT.md](./DEPLOYMENT.md)
+
+快速步骤：
+1. 登录 [Netlify](https://app.netlify.com/)
+2. 导入 GitHub 仓库：`zhaomin9103/knowledge_base`
+3. Netlify 会自动检测 `netlify.toml` 配置并开始部署
+
+项目已配置自动部署：推送到 `main` 分支会自动触发构建。
+
+### 其他平台
+
+项目也支持部署到：
+- Vercel
+- GitHub Pages
+- 其他支持静态站点的平台
+
+## 项目结构
+
+```
+agent-platform/
+├── src/
+│   ├── components/      # UI 组件
+│   │   ├── layout/      # 布局组件
+│   │   └── ui/          # 基础 UI 组件
+│   ├── config/          # 配置文件
+│   ├── hooks/           # React Hooks
+│   ├── lib/             # 工具函数
+│   ├── mocks/           # 模拟数据
+│   ├── pages/           # 页面组件
+│   └── router.tsx       # 路由配置
+├── public/              # 静态资源
+├── docs/                # 文档
+├── netlify.toml         # Netlify 配置
+└── vite.config.ts       # Vite 配置
+```
+
+## 环境变量
+
+创建 `.env` 文件（参考 `.env.example`）：
+
+```env
+# API 地址（可选）
+VITE_API_URL=https://api.example.com
+```
+
+## 开发指南
+
+### 添加新页面
+
+1. 在 `src/pages/` 创建页面组件
+2. 在 `src/router.tsx` 添加路由配置
+3. 在 `src/config/menu.ts` 更新菜单配置
+
+### 使用 UI 组件
+
+项目使用 Radix UI + Tailwind CSS，所有 UI 组件位于 `src/components/ui/`。
+
+示例：
+```tsx
+import { Button } from '@/components/ui/button';
+
+<Button variant="default">点击我</Button>
+```
+
+## 贡献
+
+欢迎提交 Issue 和 Pull Request！
+
+## 许可
+
+MIT License
+
