@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>知识库多角色文件管理与审批流程</title>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+  <style>
+    :root {
+      --bg: #f7f8fa;
+      --card: #ffffff;
+      --border: #e5e7eb;
+      --text: #1f2937;
+      --muted: #6b7280;
+      --brand: #2563eb;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 32px 24px 64px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+        "Microsoft YaHei", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+    }
+    .wrap { max-width: 1100px; margin: 0 auto; }
+    h1 { font-size: 26px; margin: 0 0 4px; }
+    .subtitle { color: var(--muted); margin: 0 0 28px; font-size: 14px; }
+
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 24px;
+      margin-bottom: 24px;
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+    }
+    h2 {
+      font-size: 17px;
+      margin: 0 0 16px;
+      padding-left: 10px;
+      border-left: 4px solid var(--brand);
+    }
+
+    table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    th, td {
+      border: 1px solid var(--border);
+      padding: 10px 12px;
+      text-align: center;
+    }
+    th { background: #f3f4f6; font-weight: 600; }
+    td:first-child { font-weight: 600; }
+    .yes { color: #16a34a; font-weight: 600; }
+    .no { color: #9ca3af; }
+
+    .diagram { overflow-x: auto; }
+    .mermaid { display: flex; justify-content: center; }
+
+    ul.rules { margin: 0; padding-left: 20px; font-size: 14px; }
+    ul.rules li { margin-bottom: 8px; }
+    code {
+      background: #f3f4f6;
+      padding: 1px 6px;
+      border-radius: 4px;
+      font-size: 13px;
+      color: #b45309;
+    }
+    footer { color: var(--muted); font-size: 12px; text-align: center; margin-top: 8px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>知识库 · 多角色文件管理与审批流程</h1>
+    <p class="subtitle">合工大 AI 辅导员 · agent-platform　|　基于角色权限（创建者 / 管理员 / 维护人员）的文件审批机制</p>
+
+    <div class="card">
+      <h2>角色与权限</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>角色</th>
+            <th>内部标识</th>
+            <th>提交变更</th>
+            <th>审核</th>
+            <th>成员管理</th>
+            <th>直接导入/编辑</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>创建者</td><td>owner</td>
+            <td class="no">—</td><td class="yes">✓</td>
+            <td class="yes">✓</td><td class="yes">✓</td>
+          </tr>
+          <tr>
+            <td>管理员</td><td>admin</td>
+            <td class="no">—</td><td class="yes">✓</td>
+            <td class="no">—</td><td class="yes">✓</td>
+          </tr>
+          <tr>
+            <td>维护人员</td><td>maintainer</td>
+            <td class="yes">✓</td><td class="no">—</td>
+            <td class="no">—</td><td class="no">需提交审核</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="card">
+      <h2>文件管理与审批流程</h2>
+      <div class="diagram">
+        <pre class="mermaid">
+flowchart TD
+    Start([进入知识库]) --> Role{当前角色?}
+
+    %% 创建者 / 管理员路径
+    Role -->|创建者 / 管理员| DirectOp[直接操作文件<br/>导入 / 编辑 / 删除]
+    DirectOp --> Applied[(变更立即生效<br/>写入文件列表)]
+
+    %% 维护人员路径
+    Role -->|维护人员| Submit[提交变更申请]
+    Submit --> OpType{操作类型}
+    OpType -->|新增 add| ReqAdd[上传新文件 + 变更说明]
+    OpType -->|更新 update| ReqUpd[选择已有文件 + 变更说明]
+    OpType -->|删除 delete| ReqDel[选择文件 + 删除理由]
+
+    ReqAdd --> Pending
+    ReqUpd --> Pending
+    ReqDel --> Pending
+
+    Pending[/状态: 待审核 pending/] --> ReviewerView[进入创建者 / 管理员<br/>『待审核』列表]
+
+    ReviewerView --> Decision{审核决定}
+
+    Decision -->|通过 approved| Approve[分配 appliedVersion<br/>记录审核人 / 时间]
+    Approve --> Applied
+    Approve --> NewVersion[(生成新版本快照<br/>进入版本记录)]
+
+    Decision -->|驳回 rejected| Reject[填写驳回原因<br/>记录审核人 / 时间]
+    Reject --> RejectState[/状态: 审核驳回/]
+    RejectState --> Resubmit[维护人员在『我的提交』<br/>查看原因 → 修改后重新提交]
+    Resubmit --> Submit
+
+    %% 记录与追溯
+    Applied --> AuditLog[(操作记录 audit log)]
+    Approve --> ReviewRecords[(审核记录 review records)]
+    Reject --> ReviewRecords
+
+    %% 维护人员可见范围
+    Pending -.可见于.-> MySubPending[我的提交 · 待审核]
+    RejectState -.可见于.-> MySubReject[我的提交 · 审核驳回]
+    Applied -.审核通过文件.-> FileList[文件列表<br/>不在『我的提交』重复显示]
+
+    classDef ownerPath fill:#dbeafe,stroke:#2563eb,color:#1e3a8a;
+    classDef maintainerPath fill:#fef3c7,stroke:#d97706,color:#92400e;
+    classDef approveNode fill:#dcfce7,stroke:#16a34a,color:#166534;
+    classDef rejectNode fill:#fee2e2,stroke:#dc2626,color:#991b1b;
+    classDef recordNode fill:#f3e8ff,stroke:#9333ea,color:#6b21a8;
+
+    class DirectOp,Applied ownerPath;
+    class Submit,ReqAdd,ReqUpd,ReqDel,Resubmit,MySubPending,MySubReject maintainerPath;
+    class Approve,NewVersion approveNode;
+    class Reject,RejectState rejectNode;
+    class AuditLog,ReviewRecords recordNode;
+        </pre>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>关键规则说明</h2>
+      <ul class="rules">
+        <li><strong>维护人员</strong>的任何变更（新增 / 更新 / 删除）都必须走审核，提交后状态为 <code>pending</code>，进入创建者 / 管理员的「待审核」队列。</li>
+        <li><strong>创建者 / 管理员</strong>对文件的操作直接生效，不进入审核流（权限判定为 <code>canReview</code> 而非 <code>canSubmit</code>）。</li>
+        <li><strong>审核通过</strong>：系统分配 <code>appliedVersion</code>，文件落入「文件列表」，并派生一条版本记录进入「版本记录」。审核通过的文件不再在维护人员「我的提交」中重复显示。</li>
+        <li><strong>审核驳回</strong>：必须填写驳回原因，维护人员可在「我的提交 · 审核驳回」中查看原因，修改后重新提交。</li>
+        <li><strong>可追溯性</strong>：所有通过 / 驳回写入「审核记录」，所有生效变更写入「操作记录」。</li>
+      </ul>
+    </div>
+
+    <footer>由代码逻辑生成 · use-kb-role.ts / reviews.ts / versions.ts / knowledge-detail.tsx</footer>
+  </div>
+
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: "base",
+      themeVariables: {
+        fontFamily: '-apple-system, "PingFang SC", "Microsoft YaHei", sans-serif',
+        fontSize: "14px",
+        primaryColor: "#ffffff",
+        primaryBorderColor: "#9ca3af",
+        primaryTextColor: "#1f2937",
+        lineColor: "#6b7280",
+      },
+      flowchart: { curve: "basis", nodeSpacing: 45, rankSpacing: 55 },
+    });
+  </script>
+</body>
+</html>
