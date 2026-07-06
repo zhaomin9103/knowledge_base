@@ -1,14 +1,12 @@
 import { useMemo, useState } from "react"
-import { GitCommitVertical, RotateCcw, Sparkles, CheckCircle2 } from "lucide-react"
+import { GitCommitVertical, Sparkles, CheckCircle2, ChevronDown, ChevronRight, Archive } from "lucide-react"
 import { getVersions, type KBVersion } from "@/mocks/versions"
 import { KNOWLEDGE_BASES } from "@/mocks/knowledge"
-import { useKBRole } from "@/hooks/use-kb-role"
 import { formatUpdatedAt } from "@/lib/format"
 import { getFileIcon, getFileIconColor } from "@/lib/file-icon"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { OperationBadge } from "./operation-badge"
-import { RollbackDialog } from "./rollback-dialog"
 import { PageNotesDrawer } from "./page-notes-drawer"
 
 interface VersionHistoryTabProps {
@@ -16,238 +14,308 @@ interface VersionHistoryTabProps {
 }
 
 const VERSION_HISTORY_NOTES = `【页面定位】
-管理员 / 创建者查看知识库的版本演进历史，并由创建者执行版本回退。
+管理员 / 创建者查看知识库的版本演进历史。
 
 【版本自动记录的触发条件】
-1. 知识库初始化：创建知识库时自动生成 v1（初始版本），图标为 ✨，无操作类型标签。
-2. 审核通过：维护人员提交的「新增 / 更新 / 删除」经管理员审核通过后，自动生成一个新版本（版本号 +1）。
-   · 驳回的提交不生成版本。
-   · 一次通过 = 一个版本，版本与审核记录一一对应。
-3. 回退「不」生成新版本（见下）。
+1. 知识库初始化：创建知识库时自动生成 v1（初始版本），图标为 Sparkles
+2. 文档审核通过：初审或复审通过后生成版本（标注提交人和审核人）
 
-【列表展示】
-竖向时间线，最新版本在顶部（版本号倒序）。每个版本卡片包含：
-· v{版本号}
-· 「当前生效」徽标（仅当前指针指向的版本）
-· 「最新」徽标（版本号最大且非当前生效时）
-· 操作类型标签：新增 / 更新 / 删除（初始化版本不显示）
-· 文档名称（带文件图标）
-· 变更说明
-· 元信息：生成时间 / 提交人 / 审核人
+【按日期分组展示】（v4.1新增）
+- 版本按日期分组，同一天的版本可折叠/展开
+- 默认展开今天和昨天的版本，更早的默认折叠
+- 仅显示最近 50 个版本，超出部分进入"历史归档"
+- 点击"查看历史归档"可查看所有旧版本
+`
 
-【回退逻辑（方案A：指针移动）】
-· 仅创建者（isOwner）可见「回退到此版本」按钮，且仅对”非当前生效”的版本显示。
-· 点击后弹出回退确认弹窗（amber 警告），说明回退影响。
-· 回退「不」生成新版本，只是把”当前生效”指针移动到目标版本。
-· 回退目标之后的版本仍然保留，可再次切换回去（前进 / 后退自由）。
-· AI 始终使用”当前生效”版本对应的知识库内容作答。
+// 按日期分组版本
+interface VersionGroup {
+  date: string // YYYY-MM-DD
+  displayDate: string // 今天 / 昨天 / MM月DD日
+  versions: KBVersion[]
+}
 
-【交互逻辑】
-1. 顶部汇总：共 N 个版本 · 当前生效 v{x}。
-2. 当前生效版本卡片高亮（brand 底色 + 实心节点）。
-3. 点击「回退到此版本」→ 确认弹窗 → 确认后当前生效指针更新，徽标随之刷新。
+function groupVersionsByDate(versions: KBVersion[]): VersionGroup[] {
+  const groups = new Map<string, KBVersion[]>()
 
-【操作逻辑 / 权限】
-· 管理员、创建者（canReview）可查看本 Tab。
-· 仅创建者可执行回退；管理员只读。
-· 维护人员无本 Tab。
+  versions.forEach((version) => {
+    const date = version.createdAt.split("T")[0] // YYYY-MM-DD
+    if (!groups.has(date)) {
+      groups.set(date, [])
+    }
+    groups.get(date)!.push(version)
+  })
 
-【备注】
-本说明用于记录页面预期逻辑，可手动编辑后保存（保存在本地浏览器）。`
+  const today = new Date().toISOString().split("T")[0]
+  const yesterday = new Date(Date.now() - 86400000).toISOString().split("T")[0]
+
+  return Array.from(groups.entries())
+    .map(([date, versions]) => {
+      let displayDate: string
+      if (date === today) {
+        displayDate = "今天"
+      } else if (date === yesterday) {
+        displayDate = "昨天"
+      } else {
+        const [, month, day] = date.split("-")
+        displayDate = `${parseInt(month)}月${parseInt(day)}日`
+      }
+
+      return {
+        date,
+        displayDate,
+        versions: versions.sort((a, b) => b.version - a.version), // 同一天内倒序
+      }
+    })
+    .sort((a, b) => b.date.localeCompare(a.date)) // 日期倒序
+}
 
 export function VersionHistoryTab({ kbId }: VersionHistoryTabProps) {
-  const { isOwner } = useKBRole(kbId)
   const kb = KNOWLEDGE_BASES.find((k) => k.id === kbId)
+  const [showArchive, setShowArchive] = useState(false)
+  const [expandedDates, setExpandedDates] = useState<Set<string>>(new Set())
 
-  const [currentVersion, setCurrentVersion] = useState<number>(
-    kb?.currentVersion ?? 1,
-  )
-  const [rollbackTarget, setRollbackTarget] = useState<number | null>(null)
+  const allVersions = useMemo(() => {
+    const versions = getVersions(kbId)
+    return versions.reverse() // 倒序：最新版本在前
+  }, [kbId])
 
-  const versions = useMemo(
-    () => getVersions(kbId).sort((a, b) => b.version - a.version),
-    [kbId],
-  )
+  // 最近50个版本（活跃版本）
+  const activeVersions = useMemo(() => allVersions.slice(0, 50), [allVersions])
 
-  const maxVersion = useMemo(
-    () => versions.reduce((max, v) => Math.max(max, v.version), 1),
-    [versions],
-  )
+  // 归档版本（超过50个的旧版本）
+  const archivedVersions = useMemo(() => allVersions.slice(50), [allVersions])
 
-  const handleRollback = (target: number) => {
-    setCurrentVersion(target)
-    setRollbackTarget(null)
+  // 显示的版本列表
+  const displayVersions = showArchive ? allVersions : activeVersions
+
+  // 按日期分组
+  const versionGroups = useMemo(() => {
+    return groupVersionsByDate(displayVersions)
+  }, [displayVersions])
+
+  // 初始化展开状态：展开今天和昨天
+  useMemo(() => {
+    const today = new Date().toISOString().split("T")[0]
+    const yesterday = new Date(Date.now() - 86400000).toISOString().split("T")[0]
+    setExpandedDates(new Set([today, yesterday]))
+  }, [])
+
+  const toggleDateExpand = (date: string) => {
+    setExpandedDates((prev) => {
+      const next = new Set(prev)
+      if (next.has(date)) {
+        next.delete(date)
+      } else {
+        next.add(date)
+      }
+      return next
+    })
   }
+
+  if (!kb) return <div className="p-8 text-center text-muted-foreground">知识库不存在</div>
+
+  const currentVersion = kb.currentVersion
 
   return (
     <div className="flex h-full flex-col gap-4">
-      <div className="flex items-center justify-between">
-        <p className="text-sm text-muted-foreground">
-          共 {versions.length} 个版本 · 当前生效
-          <span className="mx-1 font-medium text-brand-600 dark:text-brand-400">
-            v{currentVersion}
-          </span>
-        </p>
-      </div>
-
-      <div className="flex-1 overflow-auto rounded-lg border bg-card p-6">
-        <div className="relative">
-          {versions.map((version, index) => (
-            <VersionNode
-              key={version.version}
-              version={version}
-              isLatest={version.version === maxVersion}
-              isCurrent={version.version === currentVersion}
-              isLast={index === versions.length - 1}
-              canRollback={isOwner && version.version !== currentVersion}
-              onRollback={() => setRollbackTarget(version.version)}
-            />
-          ))}
-        </div>
-      </div>
-
-      {rollbackTarget != null && (
-        <RollbackDialog
-          open={rollbackTarget != null}
-          onOpenChange={(open) => !open && setRollbackTarget(null)}
-          targetVersion={rollbackTarget}
-          currentVersion={currentVersion}
-          onConfirm={() => handleRollback(rollbackTarget)}
-        />
-      )}
-
-      {/* 页面备注抽屉 */}
+      {/* 页面说明 */}
       <PageNotesDrawer
-        noteKey={`version-history:${kbId}`}
-        title="版本记录 · 页面备注"
+        noteKey="version-history"
+        title="版本记录"
         defaultContent={VERSION_HISTORY_NOTES}
       />
+
+      {/* 统计信息 */}
+      <div className="flex items-center gap-4 rounded-lg border bg-card px-4 py-3 text-sm">
+        <div className="flex items-center gap-2">
+          <GitCommitVertical className="size-4 text-muted-foreground" />
+          <span className="text-muted-foreground">当前版本：</span>
+          <span className="font-mono font-semibold text-brand-600 dark:text-brand-400">
+            v{currentVersion}
+          </span>
+        </div>
+        <div className="h-4 w-px bg-border" />
+        <div className="flex items-center gap-2 text-muted-foreground">
+          <span>总版本数：</span>
+          <span className="font-semibold text-foreground">{allVersions.length}</span>
+        </div>
+        {archivedVersions.length > 0 && !showArchive && (
+          <>
+            <div className="h-4 w-px bg-border" />
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <Archive className="size-3.5" />
+              <span>已归档：</span>
+              <span className="font-semibold text-foreground">{archivedVersions.length}</span>
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* 版本列表 */}
+      <div className="flex-1 overflow-auto rounded-lg border bg-card">
+        <div className="divide-y">
+          {versionGroups.map((group) => {
+            const isExpanded = expandedDates.has(group.date)
+
+            return (
+              <div key={group.date}>
+                {/* 日期分组头部 */}
+                <button
+                  onClick={() => toggleDateExpand(group.date)}
+                  className="flex w-full items-center gap-2 bg-muted/50 px-4 py-2.5 text-sm font-medium transition hover:bg-muted"
+                >
+                  {isExpanded ? (
+                    <ChevronDown className="size-4 text-muted-foreground" />
+                  ) : (
+                    <ChevronRight className="size-4 text-muted-foreground" />
+                  )}
+                  <span>{group.displayDate}</span>
+                  <span className="ml-1 text-xs text-muted-foreground">
+                    ({group.versions.length} 个版本)
+                  </span>
+                  {group.date === new Date().toISOString().split("T")[0] && (
+                    <span className="ml-auto text-xs text-brand-600 dark:text-brand-400">
+                      最新
+                    </span>
+                  )}
+                </button>
+
+                {/* 该日期的版本列表 */}
+                {isExpanded && (
+                  <div className="divide-y">
+                    {group.versions.map((version) => (
+                      <VersionItem
+                        key={version.version}
+                        version={version}
+                        isCurrent={version.version === currentVersion}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+
+        {/* 归档入口 */}
+        {archivedVersions.length > 0 && (
+          <div className="border-t bg-muted/30 p-4 text-center">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowArchive(!showArchive)}
+            >
+              <Archive className="mr-2 size-4" />
+              {showArchive ? "隐藏历史归档" : `查看历史归档 (${archivedVersions.length} 个版本)`}
+            </Button>
+          </div>
+        )}
+      </div>
+
+      {/* 回退确认弹窗 */}
+      {rollbackVersion && (
+        <RollbackDialog
+          targetVersion={rollbackVersion.version}
+          currentVersion={currentVersion}
+          open={!!rollbackVersion}
+          onOpenChange={(open) => !open && setRollbackVersion(null)}
+          onConfirm={() => {
+            alert(
+              `已回退到 v${rollbackVersion.version}\n\n注意：这是演示功能，真实环境需要重新解析文档并更新知识库索引。`,
+            )
+            setRollbackVersion(null)
+          }}
+        />
+      )}
     </div>
   )
 }
 
-interface VersionNodeProps {
+interface VersionItemProps {
   version: KBVersion
-  isLatest: boolean
   isCurrent: boolean
-  isLast: boolean
   canRollback: boolean
   onRollback: () => void
 }
 
-function VersionNode({
-  version,
-  isLatest,
-  isCurrent,
-  isLast,
-  canRollback,
-  onRollback,
-}: VersionNodeProps) {
+function VersionItem({ version, isCurrent, canRollback, onRollback }: VersionItemProps) {
   const isInit = version.operation === "init"
+  const Icon = isInit ? Sparkles : GitCommitVertical
   const FileIcon = version.documentExt ? getFileIcon(version.documentExt) : null
-  const fileIconColor = version.documentExt
-    ? getFileIconColor(version.documentExt)
-    : ""
+  const fileIconColor = version.documentExt ? getFileIconColor(version.documentExt) : ""
 
   return (
-    <div className="flex gap-4 pb-6 last:pb-0">
-      <div className="relative flex flex-col items-center">
+    <div className={cn("group p-4 transition", isCurrent && "bg-brand-50/50 dark:bg-brand-950/20")}>
+      <div className="flex items-start gap-4">
+        {/* 版本号图标 */}
         <div
           className={cn(
-            "z-10 flex size-9 items-center justify-center rounded-full border-2 transition",
+            "flex size-10 shrink-0 items-center justify-center rounded-full transition",
             isCurrent
-              ? "border-brand-500 bg-brand-500 text-white"
-              : "border-border bg-card text-muted-foreground",
+              ? "bg-brand-500 text-white"
+              : isInit
+                ? "bg-purple-100 text-purple-600 dark:bg-purple-950/50 dark:text-purple-400"
+                : "bg-muted text-muted-foreground group-hover:bg-muted/80",
           )}
         >
-          {isInit ? (
-            <Sparkles className="size-4" />
-          ) : (
-            <GitCommitVertical className="size-4" />
-          )}
+          <Icon className="size-5" />
         </div>
-        {!isLast && <div className="absolute top-9 h-full w-0.5 bg-border" />}
-      </div>
 
-      <div
-        className={cn(
-          "mb-1 flex-1 rounded-lg border p-4 transition",
-          isCurrent
-            ? "border-brand-300 bg-brand-50/50 dark:border-brand-800 dark:bg-brand-950/20"
-            : "bg-card",
-        )}
-      >
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="text-base font-semibold text-foreground">
-                v{version.version}
+        {/* 版本信息 */}
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <span className="font-mono text-sm font-semibold">v{version.version}</span>
+            {isCurrent && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-brand-500 px-2 py-0.5 text-xs font-medium text-white">
+                <CheckCircle2 className="size-3" />
+                当前版本
               </span>
-              {isCurrent && (
-                <span className="inline-flex items-center gap-1 rounded bg-brand-500 px-2 py-0.5 text-xs font-medium text-white">
-                  <CheckCircle2 className="size-3" />
-                  当前生效
-                </span>
-              )}
-              {isLatest && !isCurrent && (
-                <span className="rounded bg-secondary px-2 py-0.5 text-xs text-muted-foreground">
-                  最新
-                </span>
-              )}
-              {version.operation !== "init" && (
-                <OperationBadge operation={version.operation} />
-              )}
-            </div>
-
-            {isInit ? (
-              <p className="mt-2 text-sm text-muted-foreground">
-                {version.changeDescription}
-              </p>
-            ) : (
-              <div className="mt-2 space-y-1">
-                {version.documentName && (
-                  <div className="flex items-center gap-1.5 text-sm">
-                    {FileIcon && (
-                      <FileIcon
-                        className={cn("size-4 shrink-0", fileIconColor)}
-                      />
-                    )}
-                    <span className="text-foreground">
-                      {version.documentName}
-                    </span>
-                  </div>
-                )}
-                {version.changeDescription && (
-                  <p className="text-sm text-muted-foreground">
-                    {version.changeDescription}
-                  </p>
-                )}
-              </div>
             )}
-
-            <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-              <span>{formatUpdatedAt(version.createdAt)}</span>
-              {version.submitterName && version.submitterId && (
-                <span>提交：{version.submitterName}({version.submitterIdNo})</span>
-              )}
-              {version.reviewerName && version.reviewerId && (
-                <span>审核：{version.reviewerName}({version.reviewerIdNo})</span>
-              )}
-            </div>
+            {isInit && (
+              <span className="rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-700 dark:bg-purple-950/50 dark:text-purple-300">
+                初始版本
+              </span>
+            )}
+            {!isInit && version.operation !== "init" && (
+              <OperationBadge operation={version.operation} />
+            )}
           </div>
 
-          {canRollback && (
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={onRollback}
-              className="shrink-0"
-            >
-              <RotateCcw className="mr-1 size-3.5" />
-              回退到此版本
-            </Button>
+          {/* 文档名称 */}
+          {version.documentName && (
+            <div className="mt-1 flex items-center gap-2">
+              {FileIcon && <FileIcon className={cn("size-4", fileIconColor)} />}
+              <span className="truncate font-medium text-foreground">{version.documentName}</span>
+            </div>
           )}
+
+          {/* 变更说明 */}
+          {version.changeDescription && (
+            <div className="mt-1 text-sm text-muted-foreground">{version.changeDescription}</div>
+          )}
+
+          <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+            <span>{formatUpdatedAt(version.createdAt)}</span>
+            {version.submitterName && version.submitterId && (
+              <span>提交：{version.submitterName}({version.submitterIdNo})</span>
+            )}
+            {version.reviewerName && version.reviewerId && (
+              <span>审核：{version.reviewerName}({version.reviewerIdNo})</span>
+            )}
+          </div>
         </div>
+
+        {canRollback && (
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={onRollback}
+            className="shrink-0"
+          >
+            <RotateCcw className="mr-1 size-3.5" />
+            回退到此版本
+          </Button>
+        )}
       </div>
     </div>
   )

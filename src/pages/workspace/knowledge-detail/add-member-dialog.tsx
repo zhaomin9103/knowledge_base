@@ -18,6 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { Input } from "@/components/ui/input"
 
 export type AddRole = "first_reviewer" | "second_reviewer" | "maintainer"
 
@@ -35,175 +36,201 @@ export function AddMemberDialog({
   existingMemberIds,
   onConfirm,
 }: AddMemberDialogProps) {
-  const [keyword, setKeyword] = useState("")
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [selectedUserIds, setSelectedUserIds] = useState<Set<string>>(new Set())
   const [role, setRole] = useState<AddRole>("maintainer")
+  const [searchKeyword, setSearchKeyword] = useState("")
 
-  // 候选人：除已是成员外的所有非学生用户（学生不能成为知识库成员）
-  const candidates = useMemo(
-    () =>
-      MOCK_USERS.filter(
-        (u) => u.type !== "student" && !existingMemberIds.includes(u.id),
-      ),
-    [existingMemberIds],
-  )
+  // 搜索结果：根据姓名或工号搜索，排除已是成员的用户
+  const searchResults = useMemo(() => {
+    const keyword = searchKeyword.trim().toLowerCase()
 
-  const filtered = useMemo(() => {
-    const kw = keyword.trim().toLowerCase()
-    if (!kw) return candidates
-    return candidates.filter(
-      (u) =>
-        u.name.toLowerCase().includes(kw) ||
-        u.idNo.toLowerCase().includes(kw) ||
-        u.organization.toLowerCase().includes(kw),
-    )
-  }, [candidates, keyword])
+    // 如果没有输入搜索关键词，返回空数组
+    if (!keyword) {
+      return []
+    }
 
-  const toggle = (id: string) => {
-    setSelectedIds((prev) => {
+    return MOCK_USERS.filter((user) => {
+      // 排除已是成员的用户
+      if (existingMemberIds.includes(user.id)) {
+        return false
+      }
+
+      // 按姓名或工号搜索
+      const nameMatch = user.name.toLowerCase().includes(keyword)
+      const idNoMatch = user.idNo.toLowerCase().includes(keyword)
+
+      return nameMatch || idNoMatch
+    })
+  }, [searchKeyword, existingMemberIds])
+
+  const toggleUser = (userId: string) => {
+    setSelectedUserIds((prev) => {
       const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
+      if (next.has(userId)) {
+        next.delete(userId)
+      } else {
+        next.add(userId)
+      }
       return next
     })
   }
 
   const handleConfirm = () => {
-    if (selectedIds.size === 0) {
+    if (selectedUserIds.size === 0) {
       alert("请至少选择一位成员")
       return
     }
-    onConfirm(Array.from(selectedIds), role)
-    handleOpenChange(false)
+    onConfirm(Array.from(selectedUserIds), role)
+    // 重置状态
+    setSelectedUserIds(new Set())
+    setRole("maintainer")
+    setSearchKeyword("")
   }
 
-  const handleOpenChange = (next: boolean) => {
-    if (!next) {
-      setKeyword("")
-      setSelectedIds(new Set())
-      setRole("maintainer")
-    }
-    onOpenChange(next)
+  const handleCancel = () => {
+    // 重置状态
+    setSelectedUserIds(new Set())
+    setRole("maintainer")
+    setSearchKeyword("")
+    onOpenChange(false)
   }
 
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="flex max-h-[80vh] max-w-2xl flex-col overflow-hidden">
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-2xl">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <UserPlus className="size-5" />
-            添加成员
+          <DialogTitle className="flex items-center justify-between">
+            <span className="flex items-center gap-2">
+              <UserPlus className="size-5" />
+              添加成员
+            </span>
+            {selectedUserIds.size > 0 && (
+              <span className="text-sm font-normal text-brand-600 dark:text-brand-400">
+                已选 {selectedUserIds.size} 人
+              </span>
+            )}
           </DialogTitle>
         </DialogHeader>
 
-        <div className="flex flex-1 flex-col gap-4 overflow-hidden">
+        <div className="space-y-4">
+          {/* 搜索框 */}
+          <div className="space-y-2">
+            <Label>搜索成员</Label>
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                placeholder="输入姓名或工号搜索（如：张三、T20200301）"
+                value={searchKeyword}
+                onChange={(e) => setSearchKeyword(e.target.value)}
+                className="pl-9"
+              />
+              {searchKeyword && (
+                <button
+                  onClick={() => setSearchKeyword("")}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                >
+                  <X className="size-4" />
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* 搜索结果列表 */}
+          <div className="space-y-2">
+            <Label>选择成员</Label>
+            <div className="max-h-[320px] min-h-[200px] overflow-y-auto rounded-lg border bg-muted/30">
+              {!searchKeyword ? (
+                <div className="flex h-[200px] items-center justify-center text-sm text-muted-foreground">
+                  <div className="text-center">
+                    <Search className="mx-auto mb-2 size-8 opacity-30" />
+                    <p>请输入姓名或工号搜索成员</p>
+                  </div>
+                </div>
+              ) : searchResults.length === 0 ? (
+                <div className="flex h-[200px] items-center justify-center text-sm text-muted-foreground">
+                  <div className="text-center">
+                    <p>未找到匹配的成员</p>
+                    <p className="mt-1 text-xs">请尝试其他关键词</p>
+                  </div>
+                </div>
+              ) : (
+                <div className="divide-y">
+                  {searchResults.map((user) => {
+                    const isSelected = selectedUserIds.has(user.id)
+                    return (
+                      <button
+                        key={user.id}
+                        onClick={() => toggleUser(user.id)}
+                        className={cn(
+                          "flex w-full items-center gap-3 px-4 py-3 text-left transition hover:bg-muted/50",
+                          isSelected && "bg-brand-50/50 dark:bg-brand-950/20",
+                        )}
+                      >
+                        <Checkbox checked={isSelected} />
+                        <UserAvatar user={user} />
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium">{user.name}</span>
+                            <span className="text-xs text-muted-foreground">
+                              {user.idNo}
+                            </span>
+                          </div>
+                          <div className="text-sm text-muted-foreground">
+                            {user.organization}
+                          </div>
+                        </div>
+                        {user.type === "teacher" && (
+                          <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700 dark:bg-blue-950 dark:text-blue-300">
+                            教师
+                          </span>
+                        )}
+                        {user.type === "student" && (
+                          <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700 dark:bg-green-950 dark:text-green-300">
+                            学生
+                          </span>
+                        )}
+                        {user.type === "admin" && (
+                          <span className="rounded-full bg-purple-100 px-2 py-0.5 text-xs font-medium text-purple-700 dark:bg-purple-950 dark:text-purple-300">
+                            管理员
+                          </span>
+                        )}
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+
           {/* 角色选择 */}
           <div className="space-y-2">
-            <Label required>分配角色</Label>
-            <Select
-              value={role}
-              onValueChange={(v) => setRole(v as AddRole)}
-            >
+            <Label>分配角色</Label>
+            <Select value={role} onValueChange={(v) => setRole(v as AddRole)}>
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="first_reviewer">
-                  初审人（对维护人员的提交进行初审）
-                </SelectItem>
-                <SelectItem value="second_reviewer">
-                  复审人（对初审通过的提交进行复审，通过后生效）
-                </SelectItem>
-                <SelectItem value="maintainer">
-                  维护人员（可提交文档变更，需两级审核后生效）
-                </SelectItem>
+                <SelectItem value="maintainer">维护人员</SelectItem>
+                <SelectItem value="first_reviewer">初审人</SelectItem>
+                <SelectItem value="second_reviewer">复审人</SelectItem>
               </SelectContent>
             </Select>
-          </div>
-
-          {/* 搜索 */}
-          <div className="space-y-2">
-            <Label>选择成员</Label>
-            <div className="flex h-9 items-center gap-2 rounded-md border border-input bg-background px-3 text-sm">
-              <Search className="size-4 text-muted-foreground" />
-              <input
-                value={keyword}
-                onChange={(e) => setKeyword(e.target.value)}
-                placeholder="搜索姓名 / 工号 / 组织"
-                className="h-full flex-1 bg-transparent outline-none placeholder:text-muted-foreground"
-              />
-            </div>
-          </div>
-
-          {/* 已选 chips */}
-          {selectedIds.size > 0 && (
-            <div className="flex flex-wrap gap-1.5">
-              {Array.from(selectedIds).map((id) => {
-                const u = MOCK_USERS.find((x) => x.id === id)
-                if (!u) return null
-                return (
-                  <span
-                    key={id}
-                    className="inline-flex items-center gap-1 rounded bg-brand-100 px-2 py-0.5 text-xs text-brand-700 dark:bg-brand-950 dark:text-brand-300"
-                  >
-                    {u.name}
-                    <button
-                      type="button"
-                      onClick={() => toggle(id)}
-                      className="hover:opacity-70"
-                      aria-label="移除"
-                    >
-                      <X className="size-3" />
-                    </button>
-                  </span>
-                )
-              })}
-            </div>
-          )}
-
-          {/* 候选人列表 */}
-          <div className="flex-1 overflow-auto rounded-md border">
-            {filtered.length === 0 ? (
-              <div className="py-8 text-center text-sm text-muted-foreground">
-                {keyword ? "无匹配人员" : "暂无可添加成员"}
-              </div>
-            ) : (
-              filtered.map((user) => {
-                const checked = selectedIds.has(user.id)
-                return (
-                  <button
-                    key={user.id}
-                    type="button"
-                    onClick={() => toggle(user.id)}
-                    className={cn(
-                      "flex w-full items-center gap-3 border-b px-3 py-2 text-left transition last:border-b-0 hover:bg-muted/50",
-                      checked && "bg-brand-50 dark:bg-brand-950/30",
-                    )}
-                  >
-                    <Checkbox checked={checked} />
-                    <UserAvatar user={user} />
-                    <div className="min-w-0 flex-1">
-                      <div className="truncate text-sm font-medium">
-                        {user.name}
-                      </div>
-                      <div className="text-xs text-muted-foreground">
-                        工号：{user.idNo} · {user.organization}
-                      </div>
-                    </div>
-                  </button>
-                )
-              })
-            )}
+            <p className="text-xs text-muted-foreground">
+              所有选中的成员将被分配相同的角色
+            </p>
           </div>
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => handleOpenChange(false)}>
+          <Button variant="outline" onClick={handleCancel}>
             取消
           </Button>
-          <Button onClick={handleConfirm}>
-            确认添加
-            {selectedIds.size > 0 && ` (${selectedIds.size})`}
+          <Button
+            onClick={handleConfirm}
+            disabled={selectedUserIds.size === 0}
+          >
+            <UserPlus className="mr-2 size-4" />
+            确认添加 {selectedUserIds.size > 0 && `(${selectedUserIds.size})`}
           </Button>
         </DialogFooter>
       </DialogContent>
