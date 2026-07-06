@@ -19,11 +19,22 @@ interface SubmitConfirmDialogProps {
   operation: OperationType
   documentName: string
   /**
-   * 提交人是否跳过初审（初审人及以上）。
-   * 影响提示文案：跳过初审时只需复审。
+   * 提交人角色类型
+   * - second-reviewer: 复审人（直接生效，只需备注）
+   * - first-reviewer: 初审人/创建者（需选择：提交复审或直接生效）
+   * - maintainer: 维护人员（需经初审）
    */
-  skipsFirstReview?: boolean
-  onConfirm: (changeDescription: string) => void
+  submitterRole: "second-reviewer" | "first-reviewer" | "maintainer"
+  /**
+   * 是否有复审人配置
+   */
+  hasSecondReviewer?: boolean
+  /**
+   * 确认回调
+   * @param changeDescription 变更说明
+   * @param directApprove 是否直接生效（仅初审人/创建者有效）
+   */
+  onConfirm: (changeDescription: string, directApprove?: boolean) => void
 }
 
 const OPERATION_VERB: Record<OperationType, string> = {
@@ -37,18 +48,19 @@ export function SubmitConfirmDialog({
   onOpenChange,
   operation,
   documentName,
-  skipsFirstReview = false,
+  submitterRole,
+  hasSecondReviewer = true,
   onConfirm,
 }: SubmitConfirmDialogProps) {
   const [description, setDescription] = useState("")
   const [error, setError] = useState(false)
 
-  const handleConfirm = () => {
+  const handleConfirm = (directApprove?: boolean) => {
     if (!description.trim()) {
       setError(true)
       return
     }
-    onConfirm(description.trim())
+    onConfirm(description.trim(), directApprove)
     setDescription("")
     setError(false)
   }
@@ -61,13 +73,35 @@ export function SubmitConfirmDialog({
     onOpenChange(next)
   }
 
+  // 根据角色和配置生成提示文案
+  const getPromptText = () => {
+    if (submitterRole === "second-reviewer") {
+      return "您的本次操作将直接生效并生成新版本。"
+    }
+
+    if (submitterRole === "first-reviewer") {
+      if (!hasSecondReviewer) {
+        return "您的本次操作将直接生效（当前知识库未配置复审人）。"
+      }
+      return "您的本次操作需选择提交复审或直接生效。"
+    }
+
+    // maintainer
+    if (!hasSecondReviewer) {
+      return "您的本次操作将提交审核，需经初审人审核通过后生效（当前知识库未配置复审人）。"
+    }
+    return "您的本次操作将提交审核，需经初审人审核（初审人可选择直接生效或提交复审）。"
+  }
+
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <ShieldCheck className="size-5 text-brand-600 dark:text-brand-400" />
-            提交{OPERATION_VERB[operation]}申请
+            {submitterRole === "second-reviewer"
+              ? `确认${OPERATION_VERB[operation]}`
+              : `提交${OPERATION_VERB[operation]}申请`}
           </DialogTitle>
         </DialogHeader>
 
@@ -75,22 +109,12 @@ export function SubmitConfirmDialog({
           {/* 审核提示 */}
           <div className="flex gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300">
             <Info className="mt-0.5 size-4 shrink-0" />
-            <div className="space-y-1">
-              <p className="font-medium">该操作需经审核后才会生效</p>
-              <p className="text-xs leading-relaxed">
-                {skipsFirstReview ? (
-                  <>
-                    您的提交将进入
-                    <span className="font-medium">复审</span>
-                    环节，复审通过后正式生效。
-                  </>
-                ) : (
-                  <>
-                    您的提交将依次经过
-                    <span className="font-medium">初审 → 复审</span>
-                    两级审核，全部通过后才会正式生效并生成新版本；任一级驳回将退回给您。
-                  </>
-                )}
+            <div>
+              <p className="font-medium">
+                {submitterRole === "second-reviewer" ? "操作说明" : "审核说明"}
+              </p>
+              <p className="mt-1 text-xs leading-relaxed">
+                {getPromptText()}
               </p>
             </div>
           </div>
@@ -98,36 +122,66 @@ export function SubmitConfirmDialog({
           {/* 操作对象 */}
           <div className="flex items-center gap-2 rounded-lg border bg-muted/30 p-3 text-sm">
             <OperationBadge operation={operation} />
-            <span className="truncate font-medium">{documentName}</span>
+            <span className="truncate font-medium text-foreground">
+              {documentName}
+            </span>
           </div>
 
-          {/* 变更说明 */}
+          {/* 变更说明输入 */}
           <div className="space-y-2">
-            <Label htmlFor="change-desc" required>
-              变更说明
+            <Label htmlFor="change-desc" className="text-sm font-medium">
+              变更说明 <span className="text-destructive">*</span>
             </Label>
             <Textarea
               id="change-desc"
+              placeholder={`请简要说明本次${OPERATION_VERB[operation]}的原因或内容（必填）`}
               value={description}
               onChange={(e) => {
                 setDescription(e.target.value)
                 if (error) setError(false)
               }}
-              placeholder="请说明本次变更的内容与原因，供审核人参考..."
-              rows={4}
-              aria-invalid={error}
+              className={error ? "border-destructive" : ""}
+              rows={3}
             />
             {error && (
-              <p className="text-xs text-destructive">请填写变更说明</p>
+              <p className="text-xs text-destructive">变更说明不能为空</p>
             )}
           </div>
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => handleOpenChange(false)}>
-            取消
-          </Button>
-          <Button onClick={handleConfirm}>确认提交审核</Button>
+          {submitterRole === "first-reviewer" && hasSecondReviewer ? (
+            // 初审人/创建者：两个按钮（提交复审、确定生效）
+            <>
+              <Button variant="outline" onClick={() => handleOpenChange(false)}>
+                取消
+              </Button>
+              <Button
+                variant="default"
+                onClick={() => handleConfirm(false)}
+                className="bg-blue-600 hover:bg-blue-700"
+              >
+                提交复审
+              </Button>
+              <Button
+                variant="default"
+                onClick={() => handleConfirm(true)}
+                className="bg-green-600 hover:bg-green-700"
+              >
+                确定生效
+              </Button>
+            </>
+          ) : (
+            // 复审人、维护人员、降级场景：单按钮
+            <>
+              <Button variant="outline" onClick={() => handleOpenChange(false)}>
+                取消
+              </Button>
+              <Button onClick={() => handleConfirm()}>
+                {submitterRole === "second-reviewer" ? "确定" : "提交"}
+              </Button>
+            </>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>

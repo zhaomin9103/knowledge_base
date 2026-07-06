@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react"
-import { FileText, Inbox } from "lucide-react"
+import { FileText, Inbox, Clock } from "lucide-react"
 import {
   REVIEW_REQUESTS,
   isSettled,
@@ -7,12 +7,38 @@ import {
   type ReviewRequest,
   type ReviewDecision,
 } from "@/mocks/reviews"
+import { KNOWLEDGE_BASES } from "@/mocks/knowledge"
+import { MOCK_USERS } from "@/mocks/users"
 import { formatUpdatedAt, formatSizeBytes } from "@/lib/format"
 import { getFileIcon, getFileIconColor } from "@/lib/file-icon"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { OperationBadge } from "./operation-badge"
 import { ReviewResultBadge } from "./review-result-badge"
+
+/** 根据用户 ID 列表返回「姓名(工号)」组合文本 */
+function formatReviewers(userIds: string[]): string {
+  const names = userIds
+    .map((uid) => {
+      const user = MOCK_USERS.find((u) => u.id === uid)
+      return user ? `${user.name}(${user.idNo})` : null
+    })
+    .filter(Boolean)
+  return names.length > 0 ? names.join("、") : "—"
+}
+
+/** 获取当前应审核该记录的审核人文本（用于审核中状态） */
+function getPendingReviewerText(record: ReviewRequest): string {
+  const kb = KNOWLEDGE_BASES.find((k) => k.id === record.kbId)
+  if (!kb) return "—"
+  if (record.status === "pending_first") {
+    return formatReviewers(kb.firstReviewerIds)
+  }
+  if (record.status === "pending_second") {
+    return formatReviewers(kb.secondReviewerIds)
+  }
+  return "—"
+}
 import { ReviewDetailDialog } from "./review-detail-dialog"
 import { DocumentPreviewDialog } from "./document-preview-dialog"
 import { PageNotesDrawer } from "./page-notes-drawer"
@@ -84,16 +110,15 @@ export function ReviewRecordsTab({ kbId }: ReviewRecordsTabProps) {
   const [detailReview, setDetailReview] = useState<ReviewRequest | null>(null)
   const [previewReview, setPreviewReview] = useState<ReviewRequest | null>(null)
 
-  // 筛选当前知识库的已审结记录，按审结时间倒序
+  // 筛选当前知识库的所有审核记录（包括审批中和已审结），按时间倒序
   const records = useMemo(
     () =>
-      REVIEW_REQUESTS.filter((r) => r.kbId === kbId && isSettled(r)).sort(
-        (a, b) => {
-          const timeA = settledInfo(a).settledAt
-          const timeB = settledInfo(b).settledAt
-          return timeB.localeCompare(timeA)
-        },
-      ),
+      REVIEW_REQUESTS.filter((r) => r.kbId === kbId).sort((a, b) => {
+        // 审批中的按 createdAt，已审结的按审结时间
+        const timeA = isSettled(a) ? settledInfo(a).settledAt : a.createdAt
+        const timeB = isSettled(b) ? settledInfo(b).settledAt : b.createdAt
+        return timeB.localeCompare(timeA)
+      }),
     [kbId],
   )
 
@@ -118,14 +143,12 @@ export function ReviewRecordsTab({ kbId }: ReviewRecordsTabProps) {
           <table className="min-w-full border-collapse text-sm">
             <thead className="sticky top-0 z-20 bg-muted/80 backdrop-blur">
               <tr className="border-b">
-                <Th>审结时间</Th>
-                <Th>审核结果</Th>
-                <Th>审结环节</Th>
+                <Th>提交时间</Th>
+                <Th>审核状态</Th>
                 <Th>审核人</Th>
                 <Th>操作类型</Th>
                 <Th>文档名称</Th>
                 <Th>提交人</Th>
-                <Th>提交时间</Th>
                 <Th>变更说明</Th>
                 <Th>驳回原因 / 生效版本</Th>
                 {/* 操作列：sticky right */}
@@ -192,33 +215,36 @@ function RecordRow({ record, onViewDetail, onPreviewDocument }: RecordRowProps) 
   const Icon = getFileIcon(record.documentExt)
   const iconColor = getFileIconColor(record.documentExt)
   const { decision, settledAt } = settledInfo(record)
-  const result = record.status === "approved" ? "approved" : "rejected"
-  // 审结环节：通过必然在复审环节；驳回则看被驳回的环节
-  const stage = decision?.stage ?? "second"
+
+  // 获取审核人信息（审核中显示当前应审核人，已审结显示实际审核人）
+  const getCurrentReviewer = () => {
+    if (record.status === "pending_first" || record.status === "pending_second") {
+      return getPendingReviewerText(record)
+    }
+    return decision?.reviewerName
+      ? `${decision.reviewerName}${decision.reviewerIdNo ? `(${decision.reviewerIdNo})` : ""}`
+      : "—"
+  }
 
   return (
     <tr className="group border-b transition hover:bg-muted/30">
       <td className="whitespace-nowrap px-4 py-3 text-muted-foreground">
-        {formatUpdatedAt(settledAt)}
+        {isSettled(record) ? formatUpdatedAt(settledAt) : formatUpdatedAt(record.createdAt)}
       </td>
       <td className="whitespace-nowrap px-4 py-3">
-        <ReviewResultBadge result={result} />
-      </td>
-      <td className="whitespace-nowrap px-4 py-3">
-        <span
-          className={cn(
-            "inline-flex items-center rounded px-2 py-0.5 text-xs font-medium",
-            stage === "first"
-              ? "bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-400"
-              : "bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-400",
-          )}
-        >
-          {stage === "first" ? "初审" : "复审"}
-        </span>
+        {record.status === "approved" ? (
+          <ReviewResultBadge result="approved" />
+        ) : record.status === "rejected" ? (
+          <ReviewResultBadge result="rejected" />
+        ) : (
+          <span className="inline-flex items-center gap-1 rounded bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-950 dark:text-amber-400">
+            <Clock className="size-3" />
+            审核中
+          </span>
+        )}
       </td>
       <td className="whitespace-nowrap px-4 py-3 text-foreground">
-        {decision?.reviewerName ?? "—"}
-        {decision?.reviewerIdNo && `(${decision.reviewerIdNo})`}
+        {getCurrentReviewer()}
       </td>
       <td className="whitespace-nowrap px-4 py-3">
         <OperationBadge operation={record.operation} />
@@ -247,16 +273,13 @@ function RecordRow({ record, onViewDetail, onPreviewDocument }: RecordRowProps) 
           {record.submitter.name}({record.submitter.idNo})
         </span>
       </td>
-      <td className="whitespace-nowrap px-4 py-3 text-muted-foreground">
-        {formatUpdatedAt(record.createdAt)}
-      </td>
       <td className="px-4 py-3 text-muted-foreground">
         <div className="max-w-xs truncate" title={record.changeDescription}>
           {record.changeDescription}
         </div>
       </td>
       <td className="px-4 py-3 text-muted-foreground">
-        {result === "rejected" && decision?.reason ? (
+        {record.status === "rejected" && decision?.reason ? (
           <div
             className="max-w-xs truncate text-red-600 dark:text-red-400"
             title={decision.reason}

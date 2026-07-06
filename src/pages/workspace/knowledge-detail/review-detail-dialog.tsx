@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { OperationBadge } from "./operation-badge"
+import { ApprovalTimeline } from "./approval-timeline"
 
 interface ReviewDetailDialogProps {
   review: ReviewRequest
@@ -101,11 +102,24 @@ export function ReviewDetailDialog({
               ) : (
                 <ReviewDecisionBlock stage="first" decision={review.firstReview} />
               )}
-              <ReviewDecisionBlock
-                stage="second"
-                decision={review.secondReview}
-                appliedVersion={review.appliedVersion}
-              />
+              {(review.secondReview || review.status === "pending_second") && (
+                <ReviewDecisionBlock
+                  stage="second"
+                  decision={review.secondReview}
+                  appliedVersion={review.appliedVersion}
+                />
+              )}
+            </div>
+          )}
+
+          {/* 审批流时间线（只读模式底部展示） */}
+          {readOnly && (
+            <div>
+              <h3 className="mb-3 flex items-center gap-2 text-sm font-medium">
+                <Clock className="size-4" />
+                审批流
+              </h3>
+              <ApprovalTimeline review={review} />
             </div>
           )}
         </div>

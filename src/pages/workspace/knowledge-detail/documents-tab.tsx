@@ -9,6 +9,7 @@ import {
   Edit3,
 } from "lucide-react"
 import { DOCUMENTS_BY_KB, type Document } from "@/mocks/documents"
+import { KNOWLEDGE_BASES } from "@/mocks/knowledge"
 import type { OperationType } from "@/mocks/reviews"
 import { useKBRole } from "@/hooks/use-kb-role"
 import { formatSizeBytes, formatUpdatedAt } from "@/lib/format"
@@ -35,9 +36,11 @@ interface PendingOperation {
 export function DocumentsTab({ kbId }: DocumentsTabProps) {
   const [docs, setDocs] = useState<Document[]>(DOCUMENTS_BY_KB[kbId] ?? [])
   const [keyword, setKeyword] = useState("")
-  const { canSubmit, skipsFirstReview, isOwner } = useKBRole(kbId)
-  // 维护人员 / 初审人的增删改需走审核；创建者 / 复审人可直接操作（演示：仍直接生效）
-  const needsReview = canSubmit && !isOwner
+  const { canSubmit, canFirstReview, canSecondReview, isOwner } = useKBRole(kbId)
+  const kb = KNOWLEDGE_BASES.find((k) => k.id === kbId)
+  // 维护人员 / 初审人的增删改需走审核；创建者 / 纯复审人可直接操作
+  const isPureSecondReviewer = canSecondReview && !isOwner
+  const needsReview = canSubmit && !isOwner && !isPureSecondReviewer
   const [pendingOp, setPendingOp] = useState<PendingOperation | null>(null)
 
   const filtered = keyword.trim()
@@ -159,7 +162,14 @@ export function DocumentsTab({ kbId }: DocumentsTabProps) {
           onOpenChange={(open) => !open && setPendingOp(null)}
           operation={pendingOp.operation}
           documentName={pendingOp.doc.name}
-          skipsFirstReview={skipsFirstReview}
+          submitterRole={
+            canSecondReview
+              ? "second-reviewer"
+              : canFirstReview
+                ? "first-reviewer"
+                : "maintainer"
+          }
+          hasSecondReviewer={(kb?.secondReviewerIds?.length ?? 0) > 0}
           onConfirm={handleConfirmSubmit}
         />
       )}
@@ -224,7 +234,7 @@ function DocumentRow({ doc, needsReview, onDelete, onEdit }: DocumentRowProps) {
               </DropdownMenuItem>
               <DropdownMenuItem onSelect={onEdit}>
                 <Edit3 className="mr-2 size-4" />
-                {needsReview ? "更新（需审核）" : "重命名"}
+                重命名
               </DropdownMenuItem>
               <DropdownMenuItem onSelect={() => alert(`下载: ${doc.name}`)}>
                 <Download className="mr-2 size-4" />
@@ -235,7 +245,7 @@ function DocumentRow({ doc, needsReview, onDelete, onEdit }: DocumentRowProps) {
                 className="text-destructive focus:bg-destructive/10 focus:text-destructive"
               >
                 <Trash2 className="mr-2 size-4" />
-                {needsReview ? "删除（需审核）" : "删除"}
+                删除
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>

@@ -6,6 +6,7 @@ import {
   type ReviewRequest,
 } from "@/mocks/reviews"
 import { useAuth } from "@/hooks/use-auth"
+import { useKBRole } from "@/hooks/use-kb-role"
 import { formatUpdatedAt, formatSizeBytes } from "@/lib/format"
 import { getFileIcon, getFileIconColor } from "@/lib/file-icon"
 import { cn } from "@/lib/utils"
@@ -23,6 +24,10 @@ type StatusFilter = "all" | "pending" | "rejected"
 
 export function MySubmissionsTab({ kbId }: MySubmissionsTabProps) {
   const { currentUser } = useAuth()
+  const { isSecondReviewer, isOwner } = useKBRole(kbId)
+  // 仅「纯复审人」提交直接生效，无需审核状态/详情列；
+  // 创建者虽具备复审能力，但按初审人角色对待（提交仍走审核流程展示）
+  const isPureSecondReviewer = isSecondReviewer && !isOwner
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all")
   const [previewReview, setPreviewReview] = useState<ReviewRequest | null>(null)
   const [flowReview, setFlowReview] = useState<ReviewRequest | null>(null)
@@ -48,42 +53,46 @@ export function MySubmissionsTab({ kbId }: MySubmissionsTabProps) {
     return { all, pending, rejected }
   }, [mySubmissions])
 
-  // 筛选后的列表（排除已通过）
+  // 筛选后的列表
+  // 所有角色：显示所有提交记录（包括已生效的）
   const filtered = useMemo(() => {
-    const notApproved = mySubmissions.filter((r) => r.status !== "approved")
-    if (statusFilter === "all") return notApproved
-    if (statusFilter === "pending") return notApproved.filter(isPending)
-    return notApproved.filter((r) => r.status === "rejected")
+    const baseList = mySubmissions
+
+    if (statusFilter === "all") return baseList
+    if (statusFilter === "pending") return baseList.filter(isPending)
+    return baseList.filter((r) => r.status === "rejected")
   }, [mySubmissions, statusFilter])
 
   return (
     <div className="flex h-full flex-col gap-4">
-      {/* 状态筛选器 */}
-      <div className="flex items-center gap-2">
-        <FilterButton
-          active={statusFilter === "all"}
-          onClick={() => setStatusFilter("all")}
-          count={counts.all}
-        >
-          全部
-        </FilterButton>
-        <FilterButton
-          active={statusFilter === "pending"}
-          onClick={() => setStatusFilter("pending")}
-          count={counts.pending}
-          variant="warning"
-        >
-          待审核
-        </FilterButton>
-        <FilterButton
-          active={statusFilter === "rejected"}
-          onClick={() => setStatusFilter("rejected")}
+      {/* 状态筛选器 - 纯复审人不显示 */}
+      {!isPureSecondReviewer && (
+        <div className="flex items-center gap-2">
+          <FilterButton
+            active={statusFilter === "all"}
+            onClick={() => setStatusFilter("all")}
+            count={counts.all}
+          >
+            全部
+          </FilterButton>
+          <FilterButton
+            active={statusFilter === "pending"}
+            onClick={() => setStatusFilter("pending")}
+            count={counts.pending}
+            variant="warning"
+          >
+            待审核
+          </FilterButton>
+          <FilterButton
+            active={statusFilter === "rejected"}
+            onClick={() => setStatusFilter("rejected")}
           count={counts.rejected}
           variant="danger"
         >
           审核驳回
         </FilterButton>
-      </div>
+        </div>
+      )}
 
       {/* 列表 */}
       {filtered.length === 0 ? (
@@ -102,8 +111,13 @@ export function MySubmissionsTab({ kbId }: MySubmissionsTabProps) {
                 <Th>提交类型</Th>
                 <Th>提交内容</Th>
                 <Th>变更说明</Th>
-                <Th>审核状态</Th>
-                <Th className="text-center">审核详情</Th>
+                {/* 纯复审人提交直接生效，无需审核状态与审核详情列 */}
+                {!isPureSecondReviewer && (
+                  <>
+                    <Th>审核状态</Th>
+                    <Th className="text-center">审核详情</Th>
+                  </>
+                )}
               </tr>
             </thead>
             <tbody>
@@ -111,6 +125,7 @@ export function MySubmissionsTab({ kbId }: MySubmissionsTabProps) {
                 <SubmissionRow
                   key={review.id}
                   review={review}
+                  hideReviewColumns={isPureSecondReviewer}
                   onPreviewDocument={() => setPreviewReview(review)}
                   onViewFlow={() => setFlowReview(review)}
                 />
@@ -215,12 +230,14 @@ function FilterButton({
 
 interface SubmissionRowProps {
   review: ReviewRequest
+  hideReviewColumns?: boolean
   onPreviewDocument: () => void
   onViewFlow: () => void
 }
 
 function SubmissionRow({
   review,
+  hideReviewColumns = false,
   onPreviewDocument,
   onViewFlow,
 }: SubmissionRowProps) {
@@ -258,22 +275,26 @@ function SubmissionRow({
           {review.changeDescription}
         </div>
       </td>
-      <td className="whitespace-nowrap px-4 py-3">
-        <SubmissionStatusBadge status={review.status} />
-        {review.status === "rejected" && rejectedReason && (
-          <div className="mt-1 text-xs text-red-600 dark:text-red-400">
-            {rejectedReason}
-          </div>
-        )}
-      </td>
-      <td className="px-4 py-3">
-        <div className="flex justify-center">
-          <Button size="sm" variant="outline" onClick={onViewFlow}>
-            <GitBranch className="mr-1 size-3.5" />
-            查看审批流
-          </Button>
-        </div>
-      </td>
+      {!hideReviewColumns && (
+        <>
+          <td className="whitespace-nowrap px-4 py-3">
+            <SubmissionStatusBadge status={review.status} />
+            {review.status === "rejected" && rejectedReason && (
+              <div className="mt-1 text-xs text-red-600 dark:text-red-400">
+                {rejectedReason}
+              </div>
+            )}
+          </td>
+          <td className="px-4 py-3">
+            <div className="flex justify-center">
+              <Button size="sm" variant="outline" onClick={onViewFlow}>
+                <GitBranch className="mr-1 size-3.5" />
+                查看审批流
+              </Button>
+            </div>
+          </td>
+        </>
+      )}
     </tr>
   )
 }

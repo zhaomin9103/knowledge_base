@@ -40,7 +40,7 @@ export default function KnowledgeDetailPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const kb = KNOWLEDGE_BASES.find((it) => it.id === id)
-  const { role, isOwner, canFirstReview, canSecondReview, canSubmit, skipsFirstReview } = useKBRole(id)
+  const { role, isOwner, canFirstReview, canSecondReview, canSubmit, isSecondReviewer } = useKBRole(id)
   const [activeTab, setActiveTab] = useState<TabKey>("documents")
   const [importOpen, setImportOpen] = useState(false)
 
@@ -110,28 +110,26 @@ export default function KnowledgeDetailPage() {
         <div className="ml-auto flex items-center gap-2">
           <RoleSwitcher kbId={id} />
           {isOwner && (
-            <>
-              <button
-                type="button"
-                onClick={() => setActiveTab("members")}
-                className="inline-flex h-9 items-center gap-1.5 rounded-md border border-input bg-background px-4 text-sm transition hover:bg-secondary"
-              >
-                <Settings className="size-4" />
-                设置
-              </button>
-              <button
-                type="button"
-                className="inline-flex h-9 items-center gap-1.5 rounded-md border border-input bg-background px-4 text-sm transition hover:bg-secondary"
-              >
-                <Upload className="size-4" />
-                导入文件
-              </button>
-            </>
+            <button
+              type="button"
+              onClick={() => setActiveTab("members")}
+              className="inline-flex h-9 items-center gap-1.5 rounded-md border border-input bg-background px-4 text-sm transition hover:bg-secondary"
+            >
+              <Settings className="size-4" />
+              设置
+            </button>
           )}
           {canSubmit && (
             <button
               type="button"
-              onClick={() => setImportOpen(true)}
+              onClick={() => {
+                // 纯复审人操作直接生效，无需弹窗
+                if (isSecondReviewer && !isOwner) {
+                  alert("已导入文件并直接生效。\n\n可在「文件」Tab 中查看。")
+                } else {
+                  setImportOpen(true)
+                }
+              }}
               className="inline-flex h-9 items-center gap-1.5 rounded-md bg-brand-500 px-4 text-sm font-medium text-white shadow-sm transition hover:bg-brand-600"
             >
               <Upload className="size-4" />
@@ -187,12 +185,27 @@ export default function KnowledgeDetailPage() {
           onOpenChange={setImportOpen}
           operation="add"
           documentName="新导入的文件"
-          skipsFirstReview={skipsFirstReview}
-          onConfirm={(desc) => {
+          submitterRole={
+            canSecondReview
+              ? "second-reviewer"
+              : canFirstReview
+                ? "first-reviewer"
+                : "maintainer"
+          }
+          hasSecondReviewer={(kb?.secondReviewerIds?.length ?? 0) > 0}
+          onConfirm={(desc, directApprove) => {
             setImportOpen(false)
-            alert(
-              `已提交「新增文件」的审核申请。\n变更说明：${desc}\n\n可在「我的提交」中查看审批进度。`,
-            )
+            if (canSecondReview) {
+              alert(`已导入文件并生成新版本。\n变更说明：${desc}`)
+            } else if (directApprove) {
+              alert(
+                `已提交「新增文件」申请并直接生效。\n变更说明：${desc}\n\n可在「我的提交」中查看记录。`,
+              )
+            } else {
+              alert(
+                `已提交「新增文件」的审核申请。\n变更说明：${desc}\n\n可在「我的提交」中查看审批进度。`,
+              )
+            }
           }}
         />
       )}
