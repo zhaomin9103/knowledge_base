@@ -1,6 +1,15 @@
-import { useState } from "react"
+import { useMemo, useState } from "react"
 import { Check, Clock, FileText, X } from "lucide-react"
-import { REVIEW_REQUESTS, type ReviewRequest } from "@/mocks/reviews"
+import {
+  REVIEW_REQUESTS,
+  applyDecision,
+  pendingStage,
+  type ReviewRequest,
+  type ReviewStage,
+} from "@/mocks/reviews"
+import { KNOWLEDGE_BASES } from "@/mocks/knowledge"
+import { useAuth } from "@/hooks/use-auth"
+import { useKBRole } from "@/hooks/use-kb-role"
 import { formatUpdatedAt, formatSizeBytes } from "@/lib/format"
 import { getFileIcon, getFileIconColor } from "@/lib/file-icon"
 import { cn } from "@/lib/utils"
@@ -16,64 +25,107 @@ interface PendingReviewTabProps {
 }
 
 const PENDING_REVIEW_NOTES = `【页面定位】
-管理员 / 创建者的待审核工作台，集中处理维护人员提交的文档变更申请。
+初审人 / 复审人 / 创建者的待审核工作台，集中处理需要本人审核的文档变更申请。
+
+【多级审核机制】
+维护人员提交的增 / 删 / 改，需依次经过「初审 → 复审」两级：
+· 初审人先审 → 通过后进入待复审；
+· 复审人再审 → 通过后操作才正式生效并生成新版本。
+· 任一级驳回，流程即终止，记录进入「审核记录」，提交人可在「我的提交」看到驳回原因。
+· 若提交人本身具备初审及以上权限，其提交自动免初审，直接进入待复审。
 
 【数据范围】
-仅展示当前知识库中状态为「待审核」的提交记录。审核通过或驳回后，该记录立即从本列表移除，并流转到「审核记录」中。
+· 初审人：仅看到「待初审」且需自己初审的记录。
+· 复审人：仅看到「待复审」的记录。
+· 创建者：两级都可审，看到全部待审记录。
+· 审核（通过 / 驳回）后，该记录立即从本列表移除并流转到下一环节或「审核记录」。
 
 【列表字段】
-· 提交人：姓名 + 所属组织
-· 提交时间：提交申请的时间
-· 操作类型：新增 / 更新 / 删除（标签形式，颜色与详情弹窗一致）
-· 文档名称：文件图标 + 名称 + 大小，点击打开「文档预览弹窗」
-· 变更说明：提交人填写的变更描述
+· 提交人 / 提交时间 / 操作类型 / 文档名称 / 变更说明 / 当前环节
 · 操作：详情 / 通过 / 驳回
 
 【交互逻辑】
-1. 点击「文档名称」→ 弹出文档预览：
-   · 新增 → 预览新增的文档内容
-   · 删除 → 预览待删除的原文档内容
-   · 更新 → 预览变更后的文档内容
-2. 点击「详情」→ 弹出审核详情弹窗：
-   · 更新操作：左右两栏对比（左=原文档，右=变更后），并标注 +N/-M 行变化
-   · 新增 / 删除操作：不做内容对比，仅展示单侧内容
-   · 弹窗内同样可执行「通过 / 驳回」
-3. 点击「通过」→ 审核通过：
-   · 该提交从待审核列表移除
-   · 生成知识库新版本（版本号 +1，记入「版本记录」）
-   · 写入一条审核操作日志（记入「操作记录」）
-4. 点击「驳回」→ 先弹出「驳回原因」弹窗：
-   · 驳回原因为必填，未填写不可提交
-   · 确认后该提交移除，状态变更为已驳回，原因随记录留存
+1. 点击「文档名称」→ 文档预览。
+2. 点击「详情」→ 审核详情弹窗（含内容对比、已完成环节的意见），可在弹窗内通过 / 驳回。
+3. 点击「通过」：
+   · 初审通过 → 记录进入「待复审」；
+   · 复审通过 → 生成知识库新版本（版本号 +1），操作正式生效。
+4. 点击「驳回」→ 填写驳回原因（必填）后确认，流程终止。
 
 【操作逻辑 / 权限】
-· 仅 canReview（管理员、创建者）可见本 Tab 及操作按钮
-· 维护人员无审核权限，其提交进度在「我的提交」中查看
-· 审核为单级审核：一名管理员通过 / 驳回即终态
+· 仅具备审核权限（初审 / 复审 / 创建者）可见本 Tab。
+· 维护人员无审核权限，其提交进度在「我的提交」中查看。
 
 【备注】
 本说明用于记录页面预期逻辑，可手动编辑后保存（保存在本地浏览器）。`
 
 export function PendingReviewTab({ kbId }: PendingReviewTabProps) {
+  const { currentUser } = useAuth()
+  const { canFirstReview, canSecondReview } = useKBRole(kbId)
+
+  // 仅保留当前用户「有权处理」的待审记录
+  const canHandle = (r: ReviewRequest): boolean => {
+    const stage = pendingStage(r)
+    if (stage === "first") return canFirstReview
+    if (stage === "second") return canSecondReview
+    return false
+  }
+
   const [reviews, setReviews] = useState<ReviewRequest[]>(() =>
-    REVIEW_REQUESTS.filter((r) => r.kbId === kbId && r.status === "pending"),
+    REVIEW_REQUESTS.filter(
+      (r) =>
+        r.kbId === kbId &&
+        (r.status === "pending_first" || r.status === "pending_second") &&
+        canHandle(r),
+    ),
   )
   const [detailReview, setDetailReview] = useState<ReviewRequest | null>(null)
   const [previewReview, setPreviewReview] = useState<ReviewRequest | null>(null)
   const [rejectTarget, setRejectTarget] = useState<ReviewRequest | null>(null)
 
+  const nextVersion = useMemo(() => {
+    const kb = KNOWLEDGE_BASES.find((k) => k.id === kbId)
+    return (kb?.currentVersion ?? 0) + 1
+  }, [kbId])
+
+  const buildDecision = (result: "approved" | "rejected", reason?: string) => ({
+    reviewerId: currentUser.id,
+    reviewerName: currentUser.name,
+    reviewerIdNo: currentUser.idNo,
+    result,
+    reason,
+    reviewedAt: new Date().toISOString(),
+  })
+
+  const stageLabel = (stage: ReviewStage) =>
+    stage === "first" ? "初审" : "复审"
+
   const handleApprove = (review: ReviewRequest) => {
-    // 演示：通过后从待审核列表移除
+    const stage = pendingStage(review)
+    if (!stage) return
+    const updated = applyDecision(
+      review,
+      stage,
+      buildDecision("approved"),
+      stage === "second" ? nextVersion : undefined,
+    )
+    // 演示：处理后从本人待办列表移除（初审通过会流转到复审人处）
     setReviews((prev) => prev.filter((r) => r.id !== review.id))
     setDetailReview(null)
+    const hint =
+      stage === "first"
+        ? "初审通过，已流转至复审环节"
+        : `复审通过，已生效（版本 v${updated.appliedVersion}）`
+    alert(`${hint}：${review.documentName}`)
   }
 
   const handleReject = (review: ReviewRequest, reason: string) => {
-    // 演示：驳回后从待审核列表移除
+    const stage = pendingStage(review)
+    if (!stage) return
     setReviews((prev) => prev.filter((r) => r.id !== review.id))
     setRejectTarget(null)
     setDetailReview(null)
-    alert(`已驳回：${review.documentName}\n原因：${reason}`)
+    alert(`已${stageLabel(stage)}驳回：${review.documentName}\n原因：${reason}`)
   }
 
   return (
@@ -110,6 +162,9 @@ export function PendingReviewTab({ kbId }: PendingReviewTabProps) {
                 </th>
                 <th className="px-4 py-3 text-left font-medium text-muted-foreground">
                   变更说明
+                </th>
+                <th className="px-4 py-3 text-left font-medium text-muted-foreground">
+                  当前环节
                 </th>
                 <th className="px-4 py-3 text-center font-medium text-muted-foreground">
                   操作
@@ -189,6 +244,7 @@ function ReviewRow({
 }: ReviewRowProps) {
   const Icon = getFileIcon(review.documentExt)
   const iconColor = getFileIconColor(review.documentExt)
+  const stage = pendingStage(review)
 
   return (
     <tr className="group border-b transition hover:bg-muted/30">
@@ -226,6 +282,18 @@ function ReviewRow({
         <div className="max-w-xs truncate">{review.changeDescription}</div>
       </td>
       <td className="px-4 py-3">
+        <span
+          className={cn(
+            "inline-flex items-center rounded px-2 py-0.5 text-xs font-medium",
+            stage === "first"
+              ? "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-400"
+              : "bg-orange-100 text-orange-700 dark:bg-orange-950 dark:text-orange-400",
+          )}
+        >
+          {stage === "first" ? "待初审" : "待复审"}
+        </span>
+      </td>
+      <td className="px-4 py-3">
         <div className="flex items-center justify-center gap-2">
           <Button size="sm" variant="outline" onClick={onViewDetail}>
             <FileText className="mr-1 size-3.5" />
@@ -233,7 +301,7 @@ function ReviewRow({
           </Button>
           <Button size="sm" onClick={onApprove}>
             <Check className="mr-1 size-3.5" />
-            通过
+            {stage === "first" ? "初审通过" : "复审通过"}
           </Button>
           <Button size="sm" variant="destructive" onClick={onReject}>
             <X className="mr-1 size-3.5" />

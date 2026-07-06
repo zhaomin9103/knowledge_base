@@ -154,11 +154,12 @@ function LogRow({ log, onPreviewDocument }: LogRowProps) {
         <TargetCell log={log} onPreviewDocument={onPreviewDocument} />
       </td>
       <td className="px-4 py-3 text-muted-foreground">
-        {log.action === "reject" && log.meta?.reason ? (
+        {(log.action === "first_reject" || log.action === "second_reject") &&
+        log.meta?.reason ? (
           <span className="text-red-600 dark:text-red-400" title={log.meta.reason}>
             {log.meta.reason}
           </span>
-        ) : log.action === "approve" && log.meta?.version != null ? (
+        ) : log.action === "second_approve" && log.meta?.version != null ? (
           <span className="rounded bg-secondary px-2 py-0.5 text-xs">
             生效版本 v{log.meta.version}
           </span>

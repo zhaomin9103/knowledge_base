@@ -19,7 +19,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 
-export type AddRole = "admin" | "maintainer"
+export type AddRole = "first_reviewer" | "second_reviewer" | "maintainer"
 
 interface AddMemberDialogProps {
   open: boolean
@@ -108,11 +108,14 @@ export function AddMemberDialog({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="admin">
-                  管理员（可审核维护人员的提交）
+                <SelectItem value="first_reviewer">
+                  初审人（对维护人员的提交进行初审）
+                </SelectItem>
+                <SelectItem value="second_reviewer">
+                  复审人（对初审通过的提交进行复审，通过后生效）
                 </SelectItem>
                 <SelectItem value="maintainer">
-                  维护人员（可提交文档变更，需审核后生效）
+                  维护人员（可提交文档变更，需两级审核后生效）
                 </SelectItem>
               </SelectContent>
             </Select>

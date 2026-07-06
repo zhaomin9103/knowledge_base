@@ -56,7 +56,11 @@ const PENDING_REVIEW_NOTES = `【页面定位】
 
 export function PendingReviewTabEnhanced({ kbId }: PendingReviewTabProps) {
   const [reviews, setReviews] = useState<ReviewRequest[]>(() =>
-    REVIEW_REQUESTS.filter((r) => r.kbId === kbId && r.status === "pending"),
+    REVIEW_REQUESTS.filter(
+      (r) =>
+        r.kbId === kbId &&
+        (r.status === "pending_first" || r.status === "pending_second"),
+    ),
   )
   const [detailReview, setDetailReview] = useState<ReviewRequest | null>(null)
   const [previewReview, setPreviewReview] = useState<ReviewRequest | null>(null)

@@ -14,11 +14,12 @@ export interface KnowledgeBase {
   /** 更新时间 ISO 字符串 */
   updatedAt: string
 
-  /** 权限相关（新增） */
-  ownerId: string         // 创建者
-  adminIds: string[]      // 管理员列表
-  maintainerIds: string[] // 维护人员列表
-  currentVersion: number  // 当前版本号
+  /** 权限相关 */
+  ownerId: string             // 创建者
+  firstReviewerIds: string[]  // 初审人列表
+  secondReviewerIds: string[] // 复审人列表（原「管理员」角色）
+  maintainerIds: string[]     // 维护人员列表
+  currentVersion: number      // 当前版本号
 }
 
 export const KNOWLEDGE_BASES: KnowledgeBase[] = [
@@ -33,7 +34,8 @@ export const KNOWLEDGE_BASES: KnowledgeBase[] = [
       "https://images.unsplash.com/photo-1592194996308-7b43878e84a6?w=400&h=400&fit=crop",
     updatedAt: "2026-05-29T16:09:00",
     ownerId: "u-admin-001",
-    adminIds: ["u-teacher-001"],
+    firstReviewerIds: ["u-teacher-003"],
+    secondReviewerIds: ["u-teacher-001"],
     maintainerIds: ["u-teacher-002"],
     currentVersion: 1,
   },
@@ -46,7 +48,8 @@ export const KNOWLEDGE_BASES: KnowledgeBase[] = [
     creator: "admin",
     updatedAt: "2026-05-25T10:52:00",
     ownerId: "u-admin-001",
-    adminIds: ["u-teacher-001", "u-teacher-003"],
+    firstReviewerIds: ["u-teacher-003"],
+    secondReviewerIds: ["u-teacher-001"],
     maintainerIds: ["u-teacher-002", "u-teacher-004"],
     currentVersion: 3,
   },

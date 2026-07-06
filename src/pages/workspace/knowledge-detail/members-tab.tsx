@@ -18,15 +18,62 @@ import {
 import { RoleBadge } from "./role-badge"
 import { AddMemberDialog, type AddRole } from "./add-member-dialog"
 import { RemoveMemberDialog } from "./remove-member-dialog"
+import { PageNotesDrawer } from "./page-notes-drawer"
 
 interface MembersTabProps {
   kbId: string
 }
 
+const MEMBERS_NOTES = `【页面定位】
+创建者（超管）管理本知识库成员的页面。集中查看成员及其角色，并进行新增 / 变更角色 / 移除操作。
+
+【数据范围】
+· 成员来源于三类角色：创建者（owner）、管理员（admin）、维护人员（maintainer）。
+· 列表顺序：创建者在最前，其后依次为管理员、维护人员。
+· 顶部统计：总成员数，并按角色分别计数（超管 / 管理员 / 维护人员）。
+
+【列表字段】
+· 成员：头像（姓名首字） + 姓名；当前登录用户额外标注「我」。
+· 工号：成员工号（idNo）。
+· 所属组织：成员所在组织 / 学院。
+· 角色：创建者（红）/ 管理员（蓝）/ 维护人员（绿）标签。
+· 加入时间：成员加入本知识库的时间，无记录显示「—」。
+· 操作：移除成员。
+
+【交互逻辑】
+1. 搜索：按姓名 / 工号 / 组织实时过滤（前端过滤，无匹配显示空态）。
+2. 新增成员 → 弹出「添加成员弹窗」：
+   · 可多选用户，已在成员列表中的用户不可重复添加。
+   · 选择目标角色（管理员 / 维护人员），确认后批量加入。
+3. 变更角色（仅管理员 / 维护人员可变更）：
+   · 鼠标悬停角色标签 → 展开角色下拉选择器。
+   · 可在「管理员 ⇄ 维护人员」之间切换；移出且下拉关闭后恢复为标签。
+   · 创建者角色固定，不可变更。
+4. 移除成员 → 弹出二次确认弹窗：
+   · 确认后从对应角色列表移除。
+   · 创建者不可移除（按钮禁用）。
+
+【操作逻辑 / 权限】
+· 仅创建者（canManageMembers / isOwner）可见本 Tab 及全部操作。
+· 管理员、维护人员无成员管理权限。
+· 成员的增删改会写入「操作记录」（add_member / remove_member / change_role）。
+
+【备注】
+本说明用于记录页面预期逻辑，可手动编辑后保存（保存在本地浏览器）。`
+
 interface MemberItem {
   user: User
   role: Exclude<KBRole, null>
   joinedAt?: string
+}
+
+/** 可分配 / 可切换的非创建者角色 */
+type AssignableRole = "first_reviewer" | "second_reviewer" | "maintainer"
+
+const ASSIGNABLE_ROLE_LABEL: Record<AssignableRole, string> = {
+  first_reviewer: "初审人",
+  second_reviewer: "复审人",
+  maintainer: "维护人员",
 }
 
 export function MembersTab({ kbId }: MembersTabProps) {
@@ -35,15 +82,20 @@ export function MembersTab({ kbId }: MembersTabProps) {
   const [addOpen, setAddOpen] = useState(false)
   const [removeTarget, setRemoveTarget] = useState<MemberItem | null>(null)
 
-  // 演示用：使用 state 持有 admin/maintainer 列表，方便交互模拟
+  // 演示用：使用 state 持有各角色列表，方便交互模拟
   const initialKb = KNOWLEDGE_BASES.find((k) => k.id === kbId)
-  const [adminIds, setAdminIds] = useState<string[]>(initialKb?.adminIds ?? [])
+  const [firstReviewerIds, setFirstReviewerIds] = useState<string[]>(
+    initialKb?.firstReviewerIds ?? [],
+  )
+  const [secondReviewerIds, setSecondReviewerIds] = useState<string[]>(
+    initialKb?.secondReviewerIds ?? [],
+  )
   const [maintainerIds, setMaintainerIds] = useState<string[]>(
     initialKb?.maintainerIds ?? [],
   )
   const ownerId = initialKb?.ownerId ?? ""
 
-  // 组装成员列表
+  // 组装成员列表（顺序：创建者 → 复审人 → 初审人 → 维护人员）
   const members = useMemo<MemberItem[]>(() => {
     const items: MemberItem[] = []
 
@@ -56,10 +108,24 @@ export function MembersTab({ kbId }: MembersTabProps) {
       })
     }
 
-    adminIds.forEach((id) => {
+    secondReviewerIds.forEach((id) => {
       const u = MOCK_USERS.find((x) => x.id === id)
       if (u)
-        items.push({ user: u, role: "admin", joinedAt: getMemberJoinedAt(kbId, id) })
+        items.push({
+          user: u,
+          role: "second_reviewer",
+          joinedAt: getMemberJoinedAt(kbId, id),
+        })
+    })
+
+    firstReviewerIds.forEach((id) => {
+      const u = MOCK_USERS.find((x) => x.id === id)
+      if (u)
+        items.push({
+          user: u,
+          role: "first_reviewer",
+          joinedAt: getMemberJoinedAt(kbId, id),
+        })
     })
 
     maintainerIds.forEach((id) => {
@@ -73,13 +139,14 @@ export function MembersTab({ kbId }: MembersTabProps) {
     })
 
     return items
-  }, [kbId, ownerId, adminIds, maintainerIds])
+  }, [kbId, ownerId, firstReviewerIds, secondReviewerIds, maintainerIds])
 
   // 统计
   const counts = useMemo(
     () => ({
       owner: members.filter((m) => m.role === "owner").length,
-      admin: members.filter((m) => m.role === "admin").length,
+      secondReviewer: members.filter((m) => m.role === "second_reviewer").length,
+      firstReviewer: members.filter((m) => m.role === "first_reviewer").length,
       maintainer: members.filter((m) => m.role === "maintainer").length,
     }),
     [members],
@@ -98,39 +165,41 @@ export function MembersTab({ kbId }: MembersTabProps) {
   }, [members, keyword])
 
   const existingMemberIds = useMemo(
-    () => [ownerId, ...adminIds, ...maintainerIds].filter(Boolean),
-    [ownerId, adminIds, maintainerIds],
+    () =>
+      [ownerId, ...firstReviewerIds, ...secondReviewerIds, ...maintainerIds].filter(
+        Boolean,
+      ),
+    [ownerId, firstReviewerIds, secondReviewerIds, maintainerIds],
   )
 
+  const setterForRole = (role: AssignableRole) =>
+    role === "first_reviewer"
+      ? setFirstReviewerIds
+      : role === "second_reviewer"
+        ? setSecondReviewerIds
+        : setMaintainerIds
+
   const handleAddMembers = (userIds: string[], role: AddRole) => {
-    if (role === "admin") {
-      setAdminIds((prev) => Array.from(new Set([...prev, ...userIds])))
-    } else {
-      setMaintainerIds((prev) => Array.from(new Set([...prev, ...userIds])))
-    }
+    setterForRole(role)((prev) =>
+      Array.from(new Set([...prev, ...userIds])),
+    )
   }
 
   const handleChangeRole = (
     userId: string,
-    from: "admin" | "maintainer",
-    to: "admin" | "maintainer",
+    from: AssignableRole,
+    to: AssignableRole,
   ) => {
     if (from === to) return
-    if (from === "admin") {
-      setAdminIds((prev) => prev.filter((id) => id !== userId))
-      setMaintainerIds((prev) => Array.from(new Set([...prev, userId])))
-    } else {
-      setMaintainerIds((prev) => prev.filter((id) => id !== userId))
-      setAdminIds((prev) => Array.from(new Set([...prev, userId])))
-    }
+    setterForRole(from)((prev) => prev.filter((id) => id !== userId))
+    setterForRole(to)((prev) => Array.from(new Set([...prev, userId])))
   }
 
   const handleRemove = (member: MemberItem) => {
-    if (member.role === "admin") {
-      setAdminIds((prev) => prev.filter((id) => id !== member.user.id))
-    } else if (member.role === "maintainer") {
-      setMaintainerIds((prev) => prev.filter((id) => id !== member.user.id))
-    }
+    if (member.role === "owner") return
+    setterForRole(member.role as AssignableRole)((prev) =>
+      prev.filter((id) => id !== member.user.id),
+    )
   }
 
   return (
@@ -141,11 +210,15 @@ export function MembersTab({ kbId }: MembersTabProps) {
           <span>共 {members.length} 位成员</span>
           <span className="mx-1 opacity-60">·</span>
           <span className="text-red-600 dark:text-red-400">
-            {counts.owner} 超管
+            {counts.owner} 创建者
           </span>
           <span className="mx-1 opacity-60">·</span>
           <span className="text-blue-600 dark:text-blue-400">
-            {counts.admin} 管理员
+            {counts.secondReviewer} 复审人
+          </span>
+          <span className="mx-1 opacity-60">·</span>
+          <span className="text-indigo-600 dark:text-indigo-400">
+            {counts.firstReviewer} 初审人
           </span>
           <span className="mx-1 opacity-60">·</span>
           <span className="text-green-600 dark:text-green-400">
@@ -214,7 +287,7 @@ export function MembersTab({ kbId }: MembersTabProps) {
                   onChangeRole={(to) =>
                     handleChangeRole(
                       member.user.id,
-                      member.role as "admin" | "maintainer",
+                      member.role as AssignableRole,
                       to,
                     )
                   }
@@ -241,11 +314,18 @@ export function MembersTab({ kbId }: MembersTabProps) {
           onOpenChange={(open) => !open && setRemoveTarget(null)}
           memberName={removeTarget.user.name}
           memberRole={
-            removeTarget.role === "admin" ? "管理员" : "维护人员"
+            ASSIGNABLE_ROLE_LABEL[removeTarget.role as AssignableRole]
           }
           onConfirm={() => handleRemove(removeTarget)}
         />
       )}
+
+      {/* 页面备注抽屉 */}
+      <PageNotesDrawer
+        noteKey={`members:${kbId}`}
+        title="成员管理 · 页面备注"
+        defaultContent={MEMBERS_NOTES}
+      />
     </div>
   )
 }
@@ -258,8 +338,8 @@ function RoleEditor({
   role,
   onChangeRole,
 }: {
-  role: "admin" | "maintainer"
-  onChangeRole: (to: "admin" | "maintainer") => void
+  role: AssignableRole
+  onChangeRole: (to: AssignableRole) => void
 }) {
   const [hovered, setHovered] = useState(false)
   const [open, setOpen] = useState(false)
@@ -278,14 +358,17 @@ function RoleEditor({
           value={role}
           open={open}
           onOpenChange={setOpen}
-          onValueChange={(v) => onChangeRole(v as "admin" | "maintainer")}
+          onValueChange={(v) => onChangeRole(v as AssignableRole)}
         >
           <SelectTrigger className="h-8 w-32">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="admin">
-              <RoleBadge role="admin" />
+            <SelectItem value="second_reviewer">
+              <RoleBadge role="second_reviewer" />
+            </SelectItem>
+            <SelectItem value="first_reviewer">
+              <RoleBadge role="first_reviewer" />
             </SelectItem>
             <SelectItem value="maintainer">
               <RoleBadge role="maintainer" />
@@ -302,7 +385,7 @@ function RoleEditor({
 interface MemberRowProps {
   member: MemberItem
   isCurrentUser: boolean
-  onChangeRole: (to: "admin" | "maintainer") => void
+  onChangeRole: (to: AssignableRole) => void
   onRemove: () => void
 }
 
@@ -343,11 +426,11 @@ function MemberRow({
       </td>
       <td className="whitespace-nowrap px-4 py-3">
         {isOwner ? (
-          // 超管角色不可变更
+          // 创建者角色不可变更
           <RoleBadge role="owner" />
         ) : (
           <RoleEditor
-            role={member.role as "admin" | "maintainer"}
+            role={member.role as AssignableRole}
             onChangeRole={onChangeRole}
           />
         )}

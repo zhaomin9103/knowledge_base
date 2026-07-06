@@ -1,4 +1,4 @@
-import { Check, Clock, X } from "lucide-react"
+import { Check, Clock, Hourglass, X } from "lucide-react"
 import type { ReviewStatus } from "@/mocks/reviews"
 import { cn } from "@/lib/utils"
 
@@ -6,11 +6,17 @@ const CONFIG: Record<
   ReviewStatus,
   { label: string; className: string; Icon: typeof Check }
 > = {
-  pending: {
-    label: "待审核",
+  pending_first: {
+    label: "待初审",
     className:
       "bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-400",
     Icon: Clock,
+  },
+  pending_second: {
+    label: "待复审",
+    className:
+      "bg-orange-100 text-orange-700 dark:bg-orange-950 dark:text-orange-400",
+    Icon: Hourglass,
   },
   approved: {
     label: "审核通过",

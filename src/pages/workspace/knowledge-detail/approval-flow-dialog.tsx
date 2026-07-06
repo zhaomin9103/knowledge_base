@@ -24,7 +24,7 @@ interface TimelineNode {
   actor: string
   organization?: string
   timestamp: string
-  state: "done" | "current" | "rejected"
+  state: "done" | "current" | "rejected" | "waiting"
   description?: string
 }
 
@@ -41,35 +41,66 @@ function buildTimeline(review: ReviewRequest): TimelineNode[] {
     },
   ]
 
-  if (review.status === "pending") {
+  // 初审环节
+  if (review.skipFirstReview) {
     nodes.push({
-      key: "pending",
-      title: "等待审核",
-      actor: "管理员",
+      key: "first-skip",
+      title: "初审（免审）",
+      actor: "提交人具备初审权限，自动免初审",
       timestamp: "—",
-      state: "current",
+      state: "done",
     })
-  } else if (review.review) {
-    if (review.review.result === "approved") {
+  } else if (review.firstReview) {
+    const fr = review.firstReview
+    nodes.push({
+      key: "first",
+      title: fr.result === "approved" ? "初审通过" : "初审驳回",
+      actor: fr.reviewerName,
+      timestamp: fr.reviewedAt,
+      state: fr.result === "approved" ? "done" : "rejected",
+      description: fr.reason,
+    })
+  } else {
+    // 尚未初审
+    nodes.push({
+      key: "first-pending",
+      title: "等待初审",
+      actor: "初审人",
+      timestamp: "—",
+      state: review.status === "pending_first" ? "current" : "waiting",
+    })
+  }
+
+  // 复审环节：仅当初审已通过 / 免审时才进入
+  const firstPassed = review.skipFirstReview || review.firstReview?.result === "approved"
+  const firstRejected = review.firstReview?.result === "rejected"
+
+  if (!firstRejected) {
+    if (review.secondReview) {
+      const sr = review.secondReview
       nodes.push({
-        key: "approved",
-        title: "审核通过",
-        actor: review.review.reviewerName,
-        timestamp: review.review.reviewedAt,
-        state: "done",
+        key: "second",
+        title: sr.result === "approved" ? "复审通过" : "复审驳回",
+        actor: sr.reviewerName,
+        timestamp: sr.reviewedAt,
+        state: sr.result === "approved" ? "done" : "rejected",
         description:
-          review.appliedVersion != null
-            ? `生效版本：v${review.appliedVersion}`
-            : undefined,
+          sr.result === "approved"
+            ? review.appliedVersion != null
+              ? `生效版本：v${review.appliedVersion}`
+              : undefined
+            : sr.reason,
       })
     } else {
       nodes.push({
-        key: "rejected",
-        title: "审核驳回",
-        actor: review.review.reviewerName,
-        timestamp: review.review.reviewedAt,
-        state: "rejected",
-        description: review.review.reason,
+        key: "second-pending",
+        title: "等待复审",
+        actor: "复审人",
+        timestamp: "—",
+        state:
+          firstPassed && review.status === "pending_second"
+            ? "current"
+            : "waiting",
       })
     }
   }
@@ -143,6 +174,11 @@ function TimelineItem({
       bg: "bg-red-500",
       Icon: X,
       lineColor: "bg-red-500/30",
+    },
+    waiting: {
+      bg: "bg-muted-foreground/40",
+      Icon: Clock,
+      lineColor: "bg-border",
     },
   }[node.state]
 

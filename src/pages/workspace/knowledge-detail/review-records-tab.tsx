@@ -1,6 +1,12 @@
 import { useMemo, useState } from "react"
 import { FileText, Inbox } from "lucide-react"
-import { REVIEW_REQUESTS, type ReviewRequest } from "@/mocks/reviews"
+import {
+  REVIEW_REQUESTS,
+  isSettled,
+  getRejectedDecision,
+  type ReviewRequest,
+  type ReviewDecision,
+} from "@/mocks/reviews"
 import { formatUpdatedAt, formatSizeBytes } from "@/lib/format"
 import { getFileIcon, getFileIconColor } from "@/lib/file-icon"
 import { cn } from "@/lib/utils"
@@ -13,6 +19,25 @@ import { PageNotesDrawer } from "./page-notes-drawer"
 
 interface ReviewRecordsTabProps {
   kbId: string
+}
+
+/** 审结记录的终态信息：审结时间、结果、终审人 */
+function settledInfo(record: ReviewRequest): {
+  decision: ReviewDecision | undefined
+  settledAt: string
+} {
+  if (record.status === "approved") {
+    return {
+      decision: record.secondReview,
+      settledAt: record.secondReview?.reviewedAt ?? record.createdAt,
+    }
+  }
+  // rejected：取被驳回环节的意见
+  const rejected = getRejectedDecision(record)
+  return {
+    decision: rejected,
+    settledAt: rejected?.reviewedAt ?? record.createdAt,
+  }
 }
 
 const REVIEW_RECORDS_NOTES = `【页面定位】
@@ -59,16 +84,16 @@ export function ReviewRecordsTab({ kbId }: ReviewRecordsTabProps) {
   const [detailReview, setDetailReview] = useState<ReviewRequest | null>(null)
   const [previewReview, setPreviewReview] = useState<ReviewRequest | null>(null)
 
-  // 筛选当前知识库的已审核记录，按审核时间倒序
+  // 筛选当前知识库的已审结记录，按审结时间倒序
   const records = useMemo(
     () =>
-      REVIEW_REQUESTS.filter(
-        (r) => r.kbId === kbId && r.status !== "pending" && r.review,
-      ).sort((a, b) => {
-        const timeA = a.review?.reviewedAt ?? a.createdAt
-        const timeB = b.review?.reviewedAt ?? b.createdAt
-        return timeB.localeCompare(timeA)
-      }),
+      REVIEW_REQUESTS.filter((r) => r.kbId === kbId && isSettled(r)).sort(
+        (a, b) => {
+          const timeA = settledInfo(a).settledAt
+          const timeB = settledInfo(b).settledAt
+          return timeB.localeCompare(timeA)
+        },
+      ),
     [kbId],
   )
 
@@ -93,8 +118,9 @@ export function ReviewRecordsTab({ kbId }: ReviewRecordsTabProps) {
           <table className="min-w-full border-collapse text-sm">
             <thead className="sticky top-0 z-20 bg-muted/80 backdrop-blur">
               <tr className="border-b">
-                <Th>审核时间</Th>
+                <Th>审结时间</Th>
                 <Th>审核结果</Th>
+                <Th>审结环节</Th>
                 <Th>审核人</Th>
                 <Th>操作类型</Th>
                 <Th>文档名称</Th>
@@ -165,19 +191,34 @@ interface RecordRowProps {
 function RecordRow({ record, onViewDetail, onPreviewDocument }: RecordRowProps) {
   const Icon = getFileIcon(record.documentExt)
   const iconColor = getFileIconColor(record.documentExt)
-  const review = record.review!
+  const { decision, settledAt } = settledInfo(record)
+  const result = record.status === "approved" ? "approved" : "rejected"
+  // 审结环节：通过必然在复审环节；驳回则看被驳回的环节
+  const stage = decision?.stage ?? "second"
 
   return (
     <tr className="group border-b transition hover:bg-muted/30">
       <td className="whitespace-nowrap px-4 py-3 text-muted-foreground">
-        {formatUpdatedAt(review.reviewedAt)}
+        {formatUpdatedAt(settledAt)}
       </td>
       <td className="whitespace-nowrap px-4 py-3">
-        <ReviewResultBadge result={review.result} />
+        <ReviewResultBadge result={result} />
+      </td>
+      <td className="whitespace-nowrap px-4 py-3">
+        <span
+          className={cn(
+            "inline-flex items-center rounded px-2 py-0.5 text-xs font-medium",
+            stage === "first"
+              ? "bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-400"
+              : "bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-400",
+          )}
+        >
+          {stage === "first" ? "初审" : "复审"}
+        </span>
       </td>
       <td className="whitespace-nowrap px-4 py-3 text-foreground">
-        {review.reviewerName}
-        {review.reviewerIdNo && `(${review.reviewerIdNo})`}
+        {decision?.reviewerName ?? "—"}
+        {decision?.reviewerIdNo && `(${decision.reviewerIdNo})`}
       </td>
       <td className="whitespace-nowrap px-4 py-3">
         <OperationBadge operation={record.operation} />
@@ -215,12 +256,12 @@ function RecordRow({ record, onViewDetail, onPreviewDocument }: RecordRowProps) 
         </div>
       </td>
       <td className="px-4 py-3 text-muted-foreground">
-        {review.result === "rejected" && review.reason ? (
+        {result === "rejected" && decision?.reason ? (
           <div
             className="max-w-xs truncate text-red-600 dark:text-red-400"
-            title={review.reason}
+            title={decision.reason}
           >
-            {review.reason}
+            {decision.reason}
           </div>
         ) : record.appliedVersion != null ? (
           <span className="rounded bg-secondary px-2 py-0.5 text-xs">

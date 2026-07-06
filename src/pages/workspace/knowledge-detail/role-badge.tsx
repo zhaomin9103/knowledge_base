@@ -1,4 +1,4 @@
-import { Crown, Shield, Wrench } from "lucide-react"
+import { Crown, Shield, ShieldCheck, Wrench } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
 import type { KBRole } from "@/hooks/use-kb-role"
 import { cn } from "@/lib/utils"
@@ -12,9 +12,15 @@ const CONFIG: Record<
     className: "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-400",
     Icon: Crown,
   },
-  admin: {
-    label: "管理员",
+  second_reviewer: {
+    label: "复审人",
     className: "bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-400",
+    Icon: ShieldCheck,
+  },
+  first_reviewer: {
+    label: "初审人",
+    className:
+      "bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-400",
     Icon: Shield,
   },
   maintainer: {

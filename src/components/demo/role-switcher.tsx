@@ -27,7 +27,8 @@ export function RoleSwitcher({ kbId }: RoleSwitcherProps) {
   const getRoleLabel = (userId: string): string => {
     if (!kb) return ""
     if (kb.ownerId === userId) return "创建者"
-    if (kb.adminIds.includes(userId)) return "管理员"
+    if (kb.secondReviewerIds.includes(userId)) return "复审人"
+    if (kb.firstReviewerIds.includes(userId)) return "初审人"
     if (kb.maintainerIds.includes(userId)) return "维护人员"
     return "无权限"
   }
@@ -35,7 +36,10 @@ export function RoleSwitcher({ kbId }: RoleSwitcherProps) {
   const getRoleColor = (userId: string): string => {
     if (!kb) return "text-muted-foreground"
     if (kb.ownerId === userId) return "text-red-600 dark:text-red-400"
-    if (kb.adminIds.includes(userId)) return "text-blue-600 dark:text-blue-400"
+    if (kb.secondReviewerIds.includes(userId))
+      return "text-blue-600 dark:text-blue-400"
+    if (kb.firstReviewerIds.includes(userId))
+      return "text-indigo-600 dark:text-indigo-400"
     if (kb.maintainerIds.includes(userId))
       return "text-green-600 dark:text-green-400"
     return "text-gray-400"

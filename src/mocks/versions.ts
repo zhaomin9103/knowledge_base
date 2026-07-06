@@ -53,7 +53,9 @@ function deriveVersions(kbId: string): KBVersion[] {
       r.appliedVersion > 1,
   ).forEach((r) => {
     const submitter = MOCK_USERS.find((u) => u.id === r.submitter.id)
-    const reviewer = MOCK_USERS.find((u) => u.id === r.review?.reviewerId)
+    // 终审人 = 复审意见的审核人
+    const finalReview = r.secondReview
+    const reviewer = MOCK_USERS.find((u) => u.id === finalReview?.reviewerId)
     versions.push({
       version: r.appliedVersion!,
       kbId,
@@ -65,9 +67,9 @@ function deriveVersions(kbId: string): KBVersion[] {
       submitterName: submitter?.name ?? r.submitter.name,
       submitterIdNo: submitter?.idNo ?? r.submitter.idNo,
       reviewerId: reviewer?.id,
-      reviewerName: r.review?.reviewerName,
+      reviewerName: finalReview?.reviewerName,
       reviewerIdNo: reviewer?.idNo,
-      createdAt: r.review?.reviewedAt ?? r.createdAt,
+      createdAt: finalReview?.reviewedAt ?? r.createdAt,
       reviewRequestId: r.id,
     })
   })

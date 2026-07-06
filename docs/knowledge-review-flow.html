@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>知识库多角色文件管理与审批流程</title>
+  <title>知识库多级审核流程 v3.0</title>
   <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
   <style>
     :root {
@@ -24,7 +24,7 @@
       color: var(--text);
       line-height: 1.6;
     }
-    .wrap { max-width: 1100px; margin: 0 auto; }
+    .wrap { max-width: 1200px; margin: 0 auto; }
     h1 { font-size: 26px; margin: 0 0 4px; }
     .subtitle { color: var(--muted); margin: 0 0 28px; font-size: 14px; }
 
@@ -66,13 +66,23 @@
       font-size: 13px;
       color: #b45309;
     }
+    .version-badge {
+      display: inline-block;
+      background: #dbeafe;
+      color: #1e40af;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 12px;
+      font-weight: 600;
+      margin-left: 8px;
+    }
     footer { color: var(--muted); font-size: 12px; text-align: center; margin-top: 8px; }
   </style>
 </head>
 <body>
   <div class="wrap">
-    <h1>知识库 · 多角色文件管理与审批流程</h1>
-    <p class="subtitle">合工大 AI 辅导员 · agent-platform　|　基于角色权限（创建者 / 管理员 / 维护人员）的文件审批机制</p>
+    <h1>知识库 · 多级审核流程<span class="version-badge">v3.0</span></h1>
+    <p class="subtitle">合工大 AI 辅导员 · agent-platform　|　基于多级审核链（创建者 / 复审人 / 初审人 / 维护人员）+ 初审终点决策权</p>
 
     <div class="card">
       <h2>角色与权限</h2>
@@ -81,104 +91,217 @@
           <tr>
             <th>角色</th>
             <th>内部标识</th>
-            <th>提交变更</th>
-            <th>审核</th>
+            <th>审核层级</th>
+            <th>初审权</th>
+            <th>复审权</th>
+            <th>提交权</th>
             <th>成员管理</th>
-            <th>直接导入/编辑</th>
+            <th>自身提交流程</th>
           </tr>
         </thead>
         <tbody>
           <tr>
-            <td>创建者</td><td>owner</td>
-            <td class="no">—</td><td class="yes">✓</td>
-            <td class="yes">✓</td><td class="yes">✓</td>
+            <td>创建者</td><td>owner</td><td>初审级 + 管理权</td>
+            <td class="yes">✓（独立角色）</td><td class="no">—</td><td class="yes">✓</td>
+            <td class="yes">✓（独有）</td><td>需复审后生效</td>
           </tr>
           <tr>
-            <td>管理员</td><td>admin</td>
-            <td class="no">—</td><td class="yes">✓</td>
-            <td class="no">—</td><td class="yes">✓</td>
+            <td>复审人</td><td>secondReviewer</td><td>复审级（最高）</td>
+            <td class="no">—</td><td class="yes">✓</td><td class="yes">✓</td>
+            <td class="no">—</td><td>直接生效</td>
           </tr>
           <tr>
-            <td>维护人员</td><td>maintainer</td>
-            <td class="yes">✓</td><td class="no">—</td>
-            <td class="no">—</td><td class="no">需提交审核</td>
+            <td>初审人</td><td>firstReviewer</td><td>初审级</td>
+            <td class="yes">✓（含终点决策权）</td><td class="no">—</td><td class="yes">✓</td>
+            <td class="no">—</td><td>需复审后生效</td>
+          </tr>
+          <tr>
+            <td>维护人员</td><td>maintainer</td><td>提交级</td>
+            <td class="no">—</td><td class="no">—</td><td class="yes">✓</td>
+            <td class="no">—</td><td>需初审（初审人决定是否需复审）</td>
           </tr>
         </tbody>
       </table>
     </div>
 
     <div class="card">
-      <h2>文件管理与审批流程</h2>
+      <h2>多级审核流程图</h2>
       <div class="diagram">
         <pre class="mermaid">
 flowchart TD
-    Start([进入知识库]) --> Role{当前角色?}
-
-    %% 创建者 / 管理员路径
-    Role -->|创建者 / 管理员| DirectOp[直接操作文件<br/>导入 / 编辑 / 删除]
-    DirectOp --> Applied[(变更立即生效<br/>写入文件列表)]
+    Start([提交变更]) --> Role{提交人角色?}
 
     %% 维护人员路径
-    Role -->|维护人员| Submit[提交变更申请]
-    Submit --> OpType{操作类型}
-    OpType -->|新增 add| ReqAdd[上传新文件 + 变更说明]
-    OpType -->|更新 update| ReqUpd[选择已有文件 + 变更说明]
-    OpType -->|删除 delete| ReqDel[选择文件 + 删除理由]
+    Role -->|维护人员| SubmitMaint[提交增删改申请]
+    SubmitMaint --> PendingFirst[/状态: pending_first_review<br/>待初审/]
+    PendingFirst --> FirstReview{初审人/创建者审核}
 
-    ReqAdd --> Pending
-    ReqUpd --> Pending
-    ReqDel --> Pending
+    FirstReview -->|通过并生效| FirstFinal[状态: approved<br/>skipSecondReview = true<br/>可选填不提交复审理由]
+    FirstFinal --> GenVersion1[(生成版本 vN<br/>仅记录初审人)]
+    GenVersion1 --> Applied1[(变更生效<br/>写入文件列表)]
 
-    Pending[/状态: 待审核 pending/] --> ReviewerView[进入创建者 / 管理员<br/>『待审核』列表]
+    FirstReview -->|提交复审| FirstForward[状态: pending_second_review<br/>skipSecondReview = false]
+    FirstForward --> SecondReview{复审人审核}
 
-    ReviewerView --> Decision{审核决定}
+    FirstReview -->|驳回| FirstReject[状态: rejected<br/>rejectedStage = first<br/>填写驳回原因]
+    FirstReject --> Resubmit1[维护人员查看驳回原因<br/>修改后可立即重新提交]
 
-    Decision -->|通过 approved| Approve[分配 appliedVersion<br/>记录审核人 / 时间]
-    Approve --> Applied
-    Approve --> NewVersion[(生成新版本快照<br/>进入版本记录)]
+    %% 初审人/创建者路径
+    Role -->|初审人/创建者| SubmitFirst[提交增删改申请<br/>skipFirstReview = true]
+    SubmitFirst --> PendingSecond[/状态: pending_second_review<br/>待复审（免初审）/]
+    PendingSecond --> SecondReview
 
-    Decision -->|驳回 rejected| Reject[填写驳回原因<br/>记录审核人 / 时间]
-    Reject --> RejectState[/状态: 审核驳回/]
-    RejectState --> Resubmit[维护人员在『我的提交』<br/>查看原因 → 修改后重新提交]
-    Resubmit --> Submit
+    %% 复审人路径
+    Role -->|复审人| DirectSubmit[提交增删改申请]
+    DirectSubmit --> DirectApprove[状态: approved<br/>无需审核]
+    DirectApprove --> GenVersion2[(生成版本 vN<br/>无审核人记录)]
+    GenVersion2 --> Applied2[(变更直接生效)]
+
+    %% 复审环节
+    SecondReview -->|通过| SecondApprove[状态: approved<br/>记录初审人+复审人]
+    SecondApprove --> GenVersion3[(生成版本 vN<br/>记录审核链路)]
+    GenVersion3 --> Applied3[(变更生效)]
+
+    SecondReview -->|驳回| SecondReject[状态: rejected<br/>rejectedStage = second<br/>填写驳回原因]
+    SecondReject --> Resubmit2[提交人查看驳回原因<br/>修改后可立即重新提交]
 
     %% 记录与追溯
-    Applied --> AuditLog[(操作记录 audit log)]
-    Approve --> ReviewRecords[(审核记录 review records)]
-    Reject --> ReviewRecords
+    GenVersion1 --> AuditLog[(操作记录<br/>first_approve_final)]
+    GenVersion3 --> AuditLog2[(操作记录<br/>first_approve + second_approve)]
+    GenVersion2 --> AuditLog3[(操作记录<br/>直接提交生效)]
+    FirstReject --> ReviewLog1[(审核记录<br/>初审驳回)]
+    SecondReject --> ReviewLog2[(审核记录<br/>复审驳回)]
 
-    %% 维护人员可见范围
-    Pending -.可见于.-> MySubPending[我的提交 · 待审核]
-    RejectState -.可见于.-> MySubReject[我的提交 · 审核驳回]
-    Applied -.审核通过文件.-> FileList[文件列表<br/>不在『我的提交』重复显示]
-
-    classDef ownerPath fill:#dbeafe,stroke:#2563eb,color:#1e3a8a;
+    %% 样式
     classDef maintainerPath fill:#fef3c7,stroke:#d97706,color:#92400e;
-    classDef approveNode fill:#dcfce7,stroke:#16a34a,color:#166534;
+    classDef firstReviewPath fill:#dbeafe,stroke:#3b82f6,color:#1e3a8a;
+    classDef secondReviewPath fill:#dcfce7,stroke:#16a34a,color:#166534;
+    classDef directPath fill:#f3e8ff,stroke:#9333ea,color:#6b21a8;
     classDef rejectNode fill:#fee2e2,stroke:#dc2626,color:#991b1b;
-    classDef recordNode fill:#f3e8ff,stroke:#9333ea,color:#6b21a8;
+    classDef recordNode fill:#e0e7ff,stroke:#6366f1,color:#3730a3;
 
-    class DirectOp,Applied ownerPath;
-    class Submit,ReqAdd,ReqUpd,ReqDel,Resubmit,MySubPending,MySubReject maintainerPath;
-    class Approve,NewVersion approveNode;
-    class Reject,RejectState rejectNode;
-    class AuditLog,ReviewRecords recordNode;
+    class SubmitMaint,PendingFirst,Resubmit1 maintainerPath;
+    class FirstReview,FirstFinal,FirstForward,SubmitFirst firstReviewPath;
+    class SecondReview,SecondApprove,GenVersion3,PendingSecond secondReviewPath;
+    class DirectSubmit,DirectApprove,GenVersion2 directPath;
+    class FirstReject,SecondReject,Resubmit2 rejectNode;
+    class GenVersion1,AuditLog,AuditLog2,AuditLog3,ReviewLog1,ReviewLog2,Applied1,Applied2,Applied3 recordNode;
         </pre>
       </div>
     </div>
 
     <div class="card">
-      <h2>关键规则说明</h2>
+      <h2>关键规则说明（v3.0 核心变更）</h2>
       <ul class="rules">
-        <li><strong>维护人员</strong>的任何变更（新增 / 更新 / 删除）都必须走审核，提交后状态为 <code>pending</code>，进入创建者 / 管理员的「待审核」队列。</li>
-        <li><strong>创建者 / 管理员</strong>对文件的操作直接生效，不进入审核流（权限判定为 <code>canReview</code> 而非 <code>canSubmit</code>）。</li>
-        <li><strong>审核通过</strong>：系统分配 <code>appliedVersion</code>，文件落入「文件列表」，并派生一条版本记录进入「版本记录」。审核通过的文件不再在维护人员「我的提交」中重复显示。</li>
-        <li><strong>审核驳回</strong>：必须填写驳回原因，维护人员可在「我的提交 · 审核驳回」中查看原因，修改后重新提交。</li>
-        <li><strong>可追溯性</strong>：所有通过 / 驳回写入「审核记录」，所有生效变更写入「操作记录」。</li>
+        <li><strong>初审人拥有终点决策权</strong>：初审通过时可选择「通过并生效」（直接生成版本，跳过复审）或「提交复审」（转入复审环节），决策理由可选填。</li>
+        <li><strong>四个独立角色</strong>：
+          <ul>
+            <li><strong>创建者</strong>：拥有初审权 + 成员管理权（独立角色），提交需复审后生效</li>
+            <li><strong>复审人</strong>：拥有复审权（最高审核级），提交直接生效</li>
+            <li><strong>初审人</strong>：拥有初审权（含终点决策权），提交需复审后生效</li>
+            <li><strong>维护人员</strong>：只能提交，需经初审（初审人决定是否需复审）</li>
+          </ul>
+        </li>
+        <li><strong>维护人员</strong>的任何变更必须经初审，初审人决定是否需要复审。</li>
+        <li><strong>初审人 / 创建者</strong>自己的提交跳过初审，直接进入待复审环节。</li>
+        <li><strong>复审人</strong>的提交无需审核，直接生效并生成版本。</li>
+        <li><strong>流程降级规则（角色配置不完整时）</strong>：
+          <ul>
+            <li><strong>没有复审人</strong>（<code>secondReviewerIds.length === 0</code>）：
+              <ul>
+                <li>维护人员提交 → 初审人审核 → <strong>只能选择「通过并生效」</strong>（自动隐藏「提交复审」按钮）</li>
+                <li>初审人/创建者提交 → <strong>直接生效</strong>（自动跳过复审环节）</li>
+                <li>UI 提示：提交确认弹窗显示"您的提交将直接生效（当前知识库未配置复审人）"</li>
+              </ul>
+            </li>
+            <li><strong>只有创建者</strong>（极端情况）：
+              <ul>
+                <li>创建者提交 → <strong>直接生效</strong>（无需审核）</li>
+                <li>维护人员提交 → 创建者初审 → 直接生效</li>
+              </ul>
+            </li>
+          </ul>
+        </li>
+        <li><strong>文档审核中锁定</strong>：文档存在 <code>pending_first_review</code> 或 <code>pending_second_review</code> 状态的记录时，禁止其他增删改操作。一个文档同时只能有一个 pending 记录。</li>
+        <li><strong>驳回后可立即重新提交</strong>：<code>rejected</code> 状态不占用 pending 约束，驳回后可立即修改并重新提交。</li>
+        <li><strong>乐观锁并发控制</strong>：每条 <code>ReviewRequest</code> 包含 <code>version</code> 字段，审核操作提交时校验版本号，防止多人同时审核同一记录。</li>
+        <li><strong>版本生成规则</strong>：
+          <ul>
+            <li>初审直接通过：生成版本，仅记录初审人（<code>approvedBy = "first"</code>）</li>
+            <li>复审通过：生成版本，记录初审人+复审人（<code>approvedBy = "second"</code>）</li>
+            <li>复审人直接提交：生成版本，无审核人记录（<code>approvedBy = "direct"</code>）</li>
+            <li>降级场景：生成版本，标记降级原因</li>
+          </ul>
+        </li>
+        <li><strong>可追溯性</strong>：所有审核操作写入「审核记录」，所有生效变更写入「操作记录」，支持完整的审计链路。</li>
       </ul>
     </div>
 
-    <footer>由代码逻辑生成 · use-kb-role.ts / reviews.ts / versions.ts / knowledge-detail.tsx</footer>
+    <div class="card">
+      <h2>降级场景示例</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>配置情况</th>
+            <th>维护人员提交</th>
+            <th>初审人提交</th>
+            <th>创建者提交</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>完整配置</strong><br/>（有初审人+复审人）</td>
+            <td>需初审 → 可能需复审</td>
+            <td>需复审</td>
+            <td>需复审</td>
+          </tr>
+          <tr>
+            <td><strong>无复审人</strong><br/>（有初审人）</td>
+            <td>需初审 → 直接生效<br/>（初审人只能选"通过并生效"）</td>
+            <td>直接生效<br/>（自动跳过复审）</td>
+            <td>直接生效<br/>（自动跳过复审）</td>
+          </tr>
+          <tr>
+            <td><strong>只有创建者</strong><br/>（无初审人+复审人）</td>
+            <td>创建者初审 → 直接生效</td>
+            <td>—</td>
+            <td>直接生效<br/>（无需审核）</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="card">
+      <h2>Tab 可见性</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>角色</th>
+            <th>可见 Tab</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>创建者</td>
+            <td>文件 · 我的提交 · <strong>待初审</strong> · 版本记录 · 审核记录 · 操作记录 · 成员管理</td>
+          </tr>
+          <tr>
+            <td>复审人</td>
+            <td>文件 · 我的提交 · <strong>待复审</strong> · 版本记录 · 审核记录 · 操作记录</td>
+          </tr>
+          <tr>
+            <td>初审人</td>
+            <td>文件 · 我的提交 · <strong>待初审</strong> · 版本记录 · 审核记录 · 操作记录</td>
+          </tr>
+          <tr>
+            <td>维护人员</td>
+            <td>文件 · 我的提交</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <footer>v3.0 多级审核流程 · 基于 use-kb-role.ts / reviews.ts / versions.ts / operations.ts / knowledge-detail.tsx</footer>
   </div>
 
   <script>
@@ -193,7 +316,7 @@ flowchart TD
         primaryTextColor: "#1f2937",
         lineColor: "#6b7280",
       },
-      flowchart: { curve: "basis", nodeSpacing: 45, rankSpacing: 55 },
+      flowchart: { curve: "basis", nodeSpacing: 50, rankSpacing: 60 },
     });
   </script>
 </body>

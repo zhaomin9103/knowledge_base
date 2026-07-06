@@ -1,5 +1,6 @@
 import {
   Check,
+  CheckCheck,
   Plus,
   Pencil,
   Trash2,
@@ -33,14 +34,26 @@ const CONFIG: Record<
     className: "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-400",
     Icon: Trash2,
   },
-  approve: {
-    label: "审核通过",
+  first_approve: {
+    label: "初审通过",
     className:
-      "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400",
+      "bg-teal-100 text-teal-700 dark:bg-teal-950 dark:text-teal-400",
     Icon: Check,
   },
-  reject: {
-    label: "审核驳回",
+  first_reject: {
+    label: "初审驳回",
+    className:
+      "bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-400",
+    Icon: X,
+  },
+  second_approve: {
+    label: "复审通过",
+    className:
+      "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400",
+    Icon: CheckCheck,
+  },
+  second_reject: {
+    label: "复审驳回",
     className:
       "bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-400",
     Icon: X,

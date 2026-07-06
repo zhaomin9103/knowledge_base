@@ -38,9 +38,10 @@ export default function KnowledgePage() {
       creator: "admin",
       cover: values.cover,
       updatedAt: new Date().toISOString(),
-      // 新建知识库：当前用户为超管，无管理员/维护人员
+      // 新建知识库：当前用户为创建者，暂无审核人/维护人员
       ownerId: "u-admin-001",
-      adminIds: [],
+      firstReviewerIds: [],
+      secondReviewerIds: [],
       maintainerIds: [],
       currentVersion: 1,
     }

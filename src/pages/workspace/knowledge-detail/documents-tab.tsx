@@ -9,6 +9,8 @@ import {
   Edit3,
 } from "lucide-react"
 import { DOCUMENTS_BY_KB, type Document } from "@/mocks/documents"
+import type { OperationType } from "@/mocks/reviews"
+import { useKBRole } from "@/hooks/use-kb-role"
 import { formatSizeBytes, formatUpdatedAt } from "@/lib/format"
 import { getFileIcon, getFileIconColor } from "@/lib/file-icon"
 import { cn } from "@/lib/utils"
@@ -18,14 +20,25 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { SubmitConfirmDialog } from "./submit-confirm-dialog"
 
 interface DocumentsTabProps {
   kbId: string
 }
 
+/** 待提交审核的操作意图 */
+interface PendingOperation {
+  operation: OperationType
+  doc: Document
+}
+
 export function DocumentsTab({ kbId }: DocumentsTabProps) {
   const [docs, setDocs] = useState<Document[]>(DOCUMENTS_BY_KB[kbId] ?? [])
   const [keyword, setKeyword] = useState("")
+  const { canSubmit, skipsFirstReview, isOwner } = useKBRole(kbId)
+  // 维护人员 / 初审人的增删改需走审核；创建者 / 复审人可直接操作（演示：仍直接生效）
+  const needsReview = canSubmit && !isOwner
+  const [pendingOp, setPendingOp] = useState<PendingOperation | null>(null)
 
   const filtered = keyword.trim()
     ? docs.filter((d) => d.name.toLowerCase().includes(keyword.toLowerCase()))
@@ -33,10 +46,39 @@ export function DocumentsTab({ kbId }: DocumentsTabProps) {
 
   const totalSize = docs.reduce((sum, d) => sum + d.sizeBytes, 0)
 
-  const handleDelete = (docId: string) => {
-    if (confirm("确定删除该文档？")) {
-      setDocs((prev) => prev.filter((d) => d.id !== docId))
+  const handleDelete = (doc: Document) => {
+    if (needsReview) {
+      // 维护人员：删除需提交审核
+      setPendingOp({ operation: "delete", doc })
+      return
     }
+    if (confirm("确定删除该文档？")) {
+      setDocs((prev) => prev.filter((d) => d.id !== doc.id))
+    }
+  }
+
+  const handleEdit = (doc: Document) => {
+    if (needsReview) {
+      // 维护人员：更新（重命名/重新解析等内容变更）需提交审核
+      setPendingOp({ operation: "update", doc })
+      return
+    }
+    alert(`重命名: ${doc.name}`)
+  }
+
+  const handleConfirmSubmit = (changeDescription: string) => {
+    if (!pendingOp) return
+    // 演示：真实环境会向 REVIEW_REQUESTS 写入一条 pending_first 记录
+    const verb =
+      pendingOp.operation === "delete"
+        ? "删除"
+        : pendingOp.operation === "update"
+          ? "更新"
+          : "新增"
+    setPendingOp(null)
+    alert(
+      `已提交「${verb}：${pendingOp.doc.name}」的审核申请。\n变更说明：${changeDescription}\n\n可在「我的提交」中查看审批进度。`,
+    )
   }
 
   return (
@@ -100,23 +142,39 @@ export function DocumentsTab({ kbId }: DocumentsTabProps) {
                 <DocumentRow
                   key={doc.id}
                   doc={doc}
-                  onDelete={() => handleDelete(doc.id)}
+                  needsReview={needsReview}
+                  onDelete={() => handleDelete(doc)}
+                  onEdit={() => handleEdit(doc)}
                 />
               ))
             )}
           </tbody>
         </table>
       </div>
+
+      {/* 提交审核确认弹窗（维护人员的增删改） */}
+      {pendingOp && (
+        <SubmitConfirmDialog
+          open={!!pendingOp}
+          onOpenChange={(open) => !open && setPendingOp(null)}
+          operation={pendingOp.operation}
+          documentName={pendingOp.doc.name}
+          skipsFirstReview={skipsFirstReview}
+          onConfirm={handleConfirmSubmit}
+        />
+      )}
     </div>
   )
 }
 
 interface DocumentRowProps {
   doc: Document
+  needsReview: boolean
   onDelete: () => void
+  onEdit: () => void
 }
 
-function DocumentRow({ doc, onDelete }: DocumentRowProps) {
+function DocumentRow({ doc, needsReview, onDelete, onEdit }: DocumentRowProps) {
   const Icon = getFileIcon(doc.ext)
   const iconColor = getFileIconColor(doc.ext)
 
@@ -157,14 +215,16 @@ function DocumentRow({ doc, onDelete }: DocumentRowProps) {
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <DropdownMenuItem
-                onSelect={() => alert(`重新解析: ${doc.name}`)}
+                onSelect={() =>
+                  needsReview ? onEdit() : alert(`重新解析: ${doc.name}`)
+                }
               >
                 <RefreshCw className="mr-2 size-4" />
                 重新解析
               </DropdownMenuItem>
-              <DropdownMenuItem onSelect={() => alert(`重命名: ${doc.name}`)}>
+              <DropdownMenuItem onSelect={onEdit}>
                 <Edit3 className="mr-2 size-4" />
-                重命名
+                {needsReview ? "更新（需审核）" : "重命名"}
               </DropdownMenuItem>
               <DropdownMenuItem onSelect={() => alert(`下载: ${doc.name}`)}>
                 <Download className="mr-2 size-4" />
@@ -175,7 +235,7 @@ function DocumentRow({ doc, onDelete }: DocumentRowProps) {
                 className="text-destructive focus:bg-destructive/10 focus:text-destructive"
               >
                 <Trash2 className="mr-2 size-4" />
-                删除
+                {needsReview ? "删除（需审核）" : "删除"}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>

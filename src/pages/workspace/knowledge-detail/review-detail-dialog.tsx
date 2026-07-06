@@ -1,6 +1,6 @@
 import * as diff from "diff"
-import { Check, X, AlertCircle, FileText } from "lucide-react"
-import type { ReviewRequest } from "@/mocks/reviews"
+import { Check, X, AlertCircle, FileText, Clock } from "lucide-react"
+import type { ReviewRequest, ReviewDecision, ReviewStage } from "@/mocks/reviews"
 import { DOCUMENT_CONTENTS } from "@/mocks/document-contents"
 import { formatUpdatedAt, formatSizeBytes } from "@/lib/format"
 import { cn } from "@/lib/utils"
@@ -21,6 +21,8 @@ interface ReviewDetailDialogProps {
   /** 不传则为只读模式（审核记录查看），不显示通过/驳回按钮 */
   onApprove?: () => void
   onReject?: () => void
+  /** 自定义底部按钮（用于初审三按钮场景） */
+  customActions?: React.ReactNode
 }
 
 export function ReviewDetailDialog({
@@ -29,9 +31,10 @@ export function ReviewDetailDialog({
   onOpenChange,
   onApprove,
   onReject,
+  customActions,
 }: ReviewDetailDialogProps) {
   // 只读模式：没有传入审核回调（用于审核记录查看）
-  const readOnly = !onApprove && !onReject
+  const readOnly = !onApprove && !onReject && !customActions
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="flex max-h-[90vh] max-w-5xl flex-col overflow-hidden">
@@ -88,43 +91,21 @@ export function ReviewDetailDialog({
             </div>
           )}
 
-          {/* 只读模式：展示审核结果 */}
-          {readOnly && review.review && (
-            <div
-              className={cn(
-                "rounded-lg border p-4",
-                review.review.result === "approved"
-                  ? "border-green-200 bg-green-50 dark:border-green-900 dark:bg-green-950/30"
-                  : "border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-950/30",
-              )}
-            >
-              <div className="flex items-center gap-2 text-sm">
-                <span className="text-muted-foreground">审核结果：</span>
-                {review.review.result === "approved" ? (
-                  <span className="inline-flex items-center gap-1 font-medium text-green-700 dark:text-green-400">
-                    <Check className="size-4" /> 通过
-                  </span>
-                ) : (
-                  <span className="inline-flex items-center gap-1 font-medium text-red-700 dark:text-red-400">
-                    <X className="size-4" /> 驳回
-                  </span>
-                )}
-                <span className="ml-auto text-xs text-muted-foreground">
-                  {review.review.reviewerName}
-                  {review.review.reviewerIdNo && `(${review.review.reviewerIdNo})`} · {formatUpdatedAt(review.review.reviewedAt)}
-                </span>
-              </div>
-              {review.review.reason && (
-                <div className="mt-2 border-t pt-2 text-sm">
-                  <span className="text-muted-foreground">驳回原因：</span>
-                  {review.review.reason}
+          {/* 只读模式：展示两级审核意见 */}
+          {readOnly && (review.firstReview || review.secondReview || review.skipFirstReview) && (
+            <div className="space-y-3">
+              {review.skipFirstReview ? (
+                <div className="rounded-lg border border-dashed p-3 text-sm text-muted-foreground">
+                  提交人具备初审权限，本提交自动免初审，直接进入复审。
                 </div>
+              ) : (
+                <ReviewDecisionBlock stage="first" decision={review.firstReview} />
               )}
-              {review.appliedVersion != null && (
-                <div className="mt-2 border-t pt-2 text-sm text-muted-foreground">
-                  生效版本：v{review.appliedVersion}
-                </div>
-              )}
+              <ReviewDecisionBlock
+                stage="second"
+                decision={review.secondReview}
+                appliedVersion={review.appliedVersion}
+              />
             </div>
           )}
         </div>
@@ -134,7 +115,11 @@ export function ReviewDetailDialog({
             <Button variant="outline" onClick={() => onOpenChange(false)}>
               关闭
             </Button>
+          ) : customActions ? (
+            // 自定义按钮（用于初审三按钮场景）
+            customActions
           ) : (
+            // 默认两按钮（复审场景）
             <>
               <Button variant="outline" onClick={() => onOpenChange(false)}>
                 取消
@@ -283,6 +268,71 @@ function EmptyPane({ text }: { text: string }) {
   return (
     <div className="flex h-32 items-center justify-center text-sm text-muted-foreground">
       {text}
+    </div>
+  )
+}
+
+/** 单个审核环节的意见块（初审 / 复审） */
+function ReviewDecisionBlock({
+  stage,
+  decision,
+  appliedVersion,
+}: {
+  stage: ReviewStage
+  decision?: ReviewDecision
+  appliedVersion?: number
+}) {
+  const stageLabel = stage === "first" ? "初审" : "复审"
+
+  // 尚未进入该环节
+  if (!decision) {
+    return (
+      <div className="flex items-center gap-2 rounded-lg border border-dashed p-3 text-sm text-muted-foreground">
+        <Clock className="size-4" />
+        {stageLabel}：待处理
+      </div>
+    )
+  }
+
+  const approved = decision.result === "approved"
+  return (
+    <div
+      className={cn(
+        "rounded-lg border p-4",
+        approved
+          ? "border-green-200 bg-green-50 dark:border-green-900 dark:bg-green-950/30"
+          : "border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-950/30",
+      )}
+    >
+      <div className="flex items-center gap-2 text-sm">
+        <span className="font-medium text-foreground">{stageLabel}</span>
+        <span className="text-muted-foreground">·</span>
+        {approved ? (
+          <span className="inline-flex items-center gap-1 font-medium text-green-700 dark:text-green-400">
+            <Check className="size-4" /> 通过
+          </span>
+        ) : (
+          <span className="inline-flex items-center gap-1 font-medium text-red-700 dark:text-red-400">
+            <X className="size-4" /> 驳回
+          </span>
+        )}
+        <span className="ml-auto text-xs text-muted-foreground">
+          {decision.reviewerName}
+          {decision.reviewerIdNo && `(${decision.reviewerIdNo})`} ·{" "}
+          {formatUpdatedAt(decision.reviewedAt)}
+        </span>
+      </div>
+      {decision.reason && (
+        <div className="mt-2 border-t pt-2 text-sm">
+          <span className="text-muted-foreground">驳回原因：</span>
+          {decision.reason}
+        </div>
+      )}
+      {stage === "second" && approved && appliedVersion != null && (
+        <div className="mt-2 border-t pt-2 text-sm text-muted-foreground">
+          生效版本：v{appliedVersion}
+        </div>
+      )}
     </div>
   )
 }

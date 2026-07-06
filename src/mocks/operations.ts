@@ -1,4 +1,8 @@
-import { REVIEW_REQUESTS, type OperationType } from "./reviews"
+import {
+  REVIEW_REQUESTS,
+  type OperationType,
+  type ReviewDecision,
+} from "./reviews"
 import { MOCK_USERS, type User } from "./users"
 
 /** 操作类型 */
@@ -6,8 +10,10 @@ export type ActionType =
   | "submit_add" // 提交新增
   | "submit_update" // 提交更新
   | "submit_delete" // 提交删除
-  | "approve" // 审核通过
-  | "reject" // 审核驳回
+  | "first_approve" // 初审通过
+  | "first_reject" // 初审驳回
+  | "second_approve" // 复审通过
+  | "second_reject" // 复审驳回
   // 预留扩展
   | "add_member"
   | "remove_member"
@@ -50,7 +56,8 @@ const SUBMIT_ACTION_MAP: Record<OperationType, ActionType> = {
 /**
  * 从审核请求派生操作日志
  * - 每条请求生成 1 条提交日志（提交时间 / 提交人）
- * - 已审核的额外生成 1 条审核日志（审核时间 / 审核人）
+ * - 初审有结论时生成 1 条初审日志
+ * - 复审有结论时生成 1 条复审日志
  */
 function deriveLogsFromReviews(): OperationLog[] {
   const logs: OperationLog[] = []
@@ -79,37 +86,71 @@ function deriveLogsFromReviews(): OperationLog[] {
       reviewRequestId: rr.id,
     })
 
-    // 2. 审核日志（仅在已审核时）
-    if (rr.review) {
-      const reviewer = MOCK_USERS.find((u) => u.id === rr.review!.reviewerId)
-      if (!reviewer) return
+    // 2. 初审日志
+    if (rr.firstReview) {
+      pushReviewLog(logs, rr.id, rr.kbId, rr.documentName, rr.documentExt, {
+        decision: rr.firstReview,
+        approveAction: "first_approve",
+        rejectAction: "first_reject",
+        // 初审通过不生成版本，仅复审通过才落版本
+        version: undefined,
+      })
+    }
 
-      logs.push({
-        id: `log-${rr.id}-review`,
-        kbId: rr.kbId,
-        timestamp: rr.review.reviewedAt,
-        actor: {
-          id: reviewer.id,
-          name: reviewer.name,
-          idNo: reviewer.idNo,
-          organization: reviewer.organization,
-        },
-        action: rr.review.result === "approved" ? "approve" : "reject",
-        target: {
-          type: "document",
-          name: rr.documentName,
-          ext: rr.documentExt,
-        },
-        reviewRequestId: rr.id,
-        meta: {
-          reason: rr.review.reason,
-          version: rr.appliedVersion,
-        },
+    // 3. 复审日志
+    if (rr.secondReview) {
+      pushReviewLog(logs, rr.id, rr.kbId, rr.documentName, rr.documentExt, {
+        decision: rr.secondReview,
+        approveAction: "second_approve",
+        rejectAction: "second_reject",
+        version: rr.appliedVersion,
       })
     }
   })
 
   return logs
+}
+
+function pushReviewLog(
+  logs: OperationLog[],
+  reviewId: string,
+  kbId: string,
+  documentName: string,
+  documentExt: string,
+  opts: {
+    decision: ReviewDecision
+    approveAction: ActionType
+    rejectAction: ActionType
+    version?: number
+  },
+) {
+  const { decision, approveAction, rejectAction, version } = opts
+  const reviewer = MOCK_USERS.find((u) => u.id === decision.reviewerId)
+  if (!reviewer) return
+
+  const approved = decision.result === "approved"
+  logs.push({
+    id: `log-${reviewId}-${decision.stage}`,
+    kbId,
+    timestamp: decision.reviewedAt,
+    actor: {
+      id: reviewer.id,
+      name: reviewer.name,
+      idNo: reviewer.idNo,
+      organization: reviewer.organization,
+    },
+    action: approved ? approveAction : rejectAction,
+    target: {
+      type: "document",
+      name: documentName,
+      ext: documentExt,
+    },
+    reviewRequestId: reviewId,
+    meta: {
+      reason: decision.reason,
+      version: approved ? version : undefined,
+    },
+  })
 }
 
 /** 额外的非审核类操作日志（成员变更等，演示用） */
@@ -138,7 +179,7 @@ const EXTRA_LOGS: OperationLog[] = [
       organization: "信息化办公室",
     },
     action: "change_role",
-    target: { type: "member", name: "李明（管理员）" },
+    target: { type: "member", name: "李明（复审人）" },
   },
 ]
 

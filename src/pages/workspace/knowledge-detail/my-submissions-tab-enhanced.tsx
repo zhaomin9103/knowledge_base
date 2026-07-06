@@ -9,7 +9,6 @@ import { useAuth } from "@/hooks/use-auth"
 import { formatUpdatedAt, formatSizeBytes } from "@/lib/format"
 import { getFileIcon, getFileIconColor } from "@/lib/file-icon"
 import { cn } from "@/lib/utils"
-import { Button } from "@/components/ui/button"
 import { OperationBadge } from "./operation-badge"
 import { SubmissionStatusBadge } from "./submission-status-badge"
 import { DocumentPreviewDialog } from "./document-preview-dialog"
@@ -21,7 +20,7 @@ interface MySubmissionsTabProps {
 
 type StatusFilter = "all" | "pending" | "rejected"
 
-export function MySubmissionsTab({ kbId }: MySubmissionsTabProps) {
+export function MySubmissionsTabEnhanced({ kbId }: MySubmissionsTabProps) {
   const { currentUser } = useAuth()
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all")
   const [previewReview, setPreviewReview] = useState<ReviewRequest | null>(null)
@@ -57,9 +56,9 @@ export function MySubmissionsTab({ kbId }: MySubmissionsTabProps) {
   }, [mySubmissions, statusFilter])
 
   return (
-    <div className="flex h-full flex-col gap-4">
-      {/* 状态筛选器 */}
-      <div className="flex items-center gap-2">
+    <div className="flex h-full flex-col gap-6">
+      {/* 状态筛选器 - 使用设计规范的圆角和颜色 */}
+      <div className="flex items-center gap-3">
         <FilterButton
           active={statusFilter === "all"}
           onClick={() => setStatusFilter("all")}
@@ -85,38 +84,24 @@ export function MySubmissionsTab({ kbId }: MySubmissionsTabProps) {
         </FilterButton>
       </div>
 
-      {/* 列表 */}
+      {/* 卡片列表 */}
       {filtered.length === 0 ? (
-        <div className="flex flex-1 items-center justify-center rounded-lg border bg-card">
-          <div className="text-center text-muted-foreground">
-            <Inbox className="mx-auto mb-2 size-12 opacity-20" />
-            <p>暂无提交记录</p>
+        <div className="flex flex-1 items-center justify-center rounded-xl bg-white">
+          <div className="text-center">
+            <Inbox className="mx-auto mb-3 size-16 text-[#BFBFBF]" />
+            <p className="text-sm text-[#858890]">暂无提交记录</p>
           </div>
         </div>
       ) : (
-        <div className="flex-1 overflow-auto rounded-lg border bg-card">
-          <table className="w-full border-collapse text-sm">
-            <thead className="sticky top-0 z-10 bg-muted/80 backdrop-blur">
-              <tr className="border-b">
-                <Th>提交时间</Th>
-                <Th>提交类型</Th>
-                <Th>提交内容</Th>
-                <Th>变更说明</Th>
-                <Th>审核状态</Th>
-                <Th className="text-center">审核详情</Th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((review) => (
-                <SubmissionRow
-                  key={review.id}
-                  review={review}
-                  onPreviewDocument={() => setPreviewReview(review)}
-                  onViewFlow={() => setFlowReview(review)}
-                />
-              ))}
-            </tbody>
-          </table>
+        <div className="flex-1 space-y-4 overflow-auto pb-4">
+          {filtered.map((review) => (
+            <SubmissionCard
+              key={review.id}
+              review={review}
+              onPreviewDocument={() => setPreviewReview(review)}
+              onViewFlow={() => setFlowReview(review)}
+            />
+          ))}
         </div>
       )}
 
@@ -141,30 +126,11 @@ export function MySubmissionsTab({ kbId }: MySubmissionsTabProps) {
   )
 }
 
-function Th({
-  children,
-  className,
-}: {
-  children: React.ReactNode
-  className?: string
-}) {
-  return (
-    <th
-      className={cn(
-        "px-4 py-3 text-left font-medium text-muted-foreground",
-        className,
-      )}
-    >
-      {children}
-    </th>
-  )
-}
-
 interface FilterButtonProps {
   active: boolean
   onClick: () => void
   count: number
-  variant?: "default" | "warning" | "success" | "danger"
+  variant?: "default" | "warning" | "danger"
   children: React.ReactNode
 }
 
@@ -176,16 +142,15 @@ function FilterButton({
   children,
 }: FilterButtonProps) {
   const variantClasses = {
-    default: active ? "bg-brand-500 text-white" : "",
+    default: active
+      ? "bg-gradient-to-r from-[#494AFF] to-[#006EFE] text-white shadow-md"
+      : "bg-white text-[#0B111E] hover:bg-[#F3F4F7]",
     warning: active
-      ? "bg-amber-500 text-white dark:bg-amber-600"
-      : "hover:bg-amber-50 dark:hover:bg-amber-950/30",
-    success: active
-      ? "bg-green-500 text-white dark:bg-green-600"
-      : "hover:bg-green-50 dark:hover:bg-green-950/30",
+      ? "bg-gradient-to-r from-[#FF9F43] to-[#FFA94D] text-white shadow-md"
+      : "bg-white text-[#0B111E] hover:bg-[#FEF3E2]",
     danger: active
-      ? "bg-red-500 text-white dark:bg-red-600"
-      : "hover:bg-red-50 dark:hover:bg-red-950/30",
+      ? "bg-gradient-to-r from-[#E95141] to-[#F16B5C] text-white shadow-md"
+      : "bg-white text-[#0B111E] hover:bg-[#FFF1F0]",
   }
 
   return (
@@ -193,18 +158,16 @@ function FilterButton({
       type="button"
       onClick={onClick}
       className={cn(
-        "inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-sm font-medium transition",
-        active
-          ? "border-transparent shadow-sm"
-          : "border-input bg-background hover:bg-secondary",
+        "inline-flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium transition-all",
+        active ? "border-transparent" : "border-[#E7E7E9]",
         variantClasses[variant],
       )}
     >
       {children}
       <span
         className={cn(
-          "rounded-full px-1.5 py-0.5 text-xs",
-          active ? "bg-white/20" : "bg-muted",
+          "flex h-5 min-w-[20px] items-center justify-center rounded-full px-1.5 text-xs font-medium",
+          active ? "bg-white/20 text-white" : "bg-[#F3F4F7] text-[#858890]",
         )}
       >
         {count}
@@ -213,67 +176,84 @@ function FilterButton({
   )
 }
 
-interface SubmissionRowProps {
+interface SubmissionCardProps {
   review: ReviewRequest
   onPreviewDocument: () => void
   onViewFlow: () => void
 }
 
-function SubmissionRow({
+function SubmissionCard({
   review,
   onPreviewDocument,
   onViewFlow,
-}: SubmissionRowProps) {
+}: SubmissionCardProps) {
   const Icon = getFileIcon(review.documentExt)
   const iconColor = getFileIconColor(review.documentExt)
   const rejectedReason = getRejectedDecision(review)?.reason
 
   return (
-    <tr className="group border-b transition hover:bg-muted/30">
-      <td className="whitespace-nowrap px-4 py-3 text-muted-foreground">
-        {formatUpdatedAt(review.createdAt)}
-      </td>
-      <td className="whitespace-nowrap px-4 py-3">
-        <OperationBadge operation={review.operation} />
-      </td>
-      <td className="px-4 py-3">
-        <button
-          type="button"
-          onClick={onPreviewDocument}
-          className="flex max-w-sm items-center gap-2 text-left transition hover:text-brand-600 dark:hover:text-brand-400"
-        >
-          <Icon className={cn("size-4 shrink-0", iconColor)} />
-          <div className="min-w-0 flex-1">
-            <div className="truncate text-foreground">{review.documentName}</div>
-            {review.fileSizeBytes && (
-              <div className="text-xs text-muted-foreground">
-                {formatSizeBytes(review.fileSizeBytes)}
-              </div>
-            )}
-          </div>
-        </button>
-      </td>
-      <td className="px-4 py-3 text-muted-foreground">
-        <div className="max-w-xs truncate" title={review.changeDescription}>
-          {review.changeDescription}
+    <div className="group relative overflow-hidden rounded-xl border border-[#E7E7E9] bg-white transition-all hover:border-[#1947FF]/20 hover:shadow-lg">
+      {/* 顶部装饰线 */}
+      <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-[#494AFF] to-[#006EFE] opacity-0 transition-opacity group-hover:opacity-100" />
+
+      <div className="p-6">
+        {/* 头部：文件信息 + 操作类型 */}
+        <div className="mb-4 flex items-start justify-between gap-4">
+          <button
+            type="button"
+            onClick={onPreviewDocument}
+            className="flex min-w-0 flex-1 items-center gap-3 text-left transition-colors hover:text-[#1947FF]"
+          >
+            <div className="flex size-12 shrink-0 items-center justify-center rounded-lg bg-[#F3F4F7]">
+              <Icon className={cn("size-6", iconColor)} />
+            </div>
+            <div className="min-w-0 flex-1">
+              <h3 className="truncate text-base font-medium text-[#0C1222]">
+                {review.documentName}
+              </h3>
+              {review.fileSizeBytes && (
+                <p className="text-xs text-[#858890]">
+                  {formatSizeBytes(review.fileSizeBytes)}
+                </p>
+              )}
+            </div>
+          </button>
+          <OperationBadge operation={review.operation} />
         </div>
-      </td>
-      <td className="whitespace-nowrap px-4 py-3">
-        <SubmissionStatusBadge status={review.status} />
+
+        {/* 变更说明 */}
+        <div className="mb-4">
+          <p className="text-sm text-[#666666] line-clamp-2">
+            {review.changeDescription}
+          </p>
+        </div>
+
+        {/* 底部：状态 + 时间 + 操作 */}
+        <div className="flex items-center justify-between gap-4 border-t border-[#F0F0F0] pt-4">
+          <div className="flex items-center gap-3">
+            <SubmissionStatusBadge status={review.status} />
+            <span className="text-xs text-[#858890]">
+              {formatUpdatedAt(review.createdAt)}
+            </span>
+          </div>
+
+          <button
+            type="button"
+            onClick={onViewFlow}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-[#E7E7E9] bg-white px-3 py-1.5 text-sm text-[#0B111E] transition-all hover:border-[#1947FF] hover:text-[#1947FF]"
+          >
+            <GitBranch className="size-3.5" />
+            查看审批流
+          </button>
+        </div>
+
+        {/* 驳回原因（如果有） */}
         {review.status === "rejected" && rejectedReason && (
-          <div className="mt-1 text-xs text-red-600 dark:text-red-400">
-            {rejectedReason}
+          <div className="mt-3 rounded-lg bg-[#FFF1F0] px-3 py-2 text-sm text-[#E95141]">
+            驳回原因：{rejectedReason}
           </div>
         )}
-      </td>
-      <td className="px-4 py-3">
-        <div className="flex justify-center">
-          <Button size="sm" variant="outline" onClick={onViewFlow}>
-            <GitBranch className="mr-1 size-3.5" />
-            查看审批流
-          </Button>
-        </div>
-      </td>
-    </tr>
+      </div>
+    </div>
   )
 }

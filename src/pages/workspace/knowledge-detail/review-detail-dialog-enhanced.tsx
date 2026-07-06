@@ -1,6 +1,6 @@
 import * as diff from "diff"
-import { Check, X, AlertCircle, FileText, User, Calendar, Package } from "lucide-react"
-import type { ReviewRequest } from "@/mocks/reviews"
+import { Check, X, AlertCircle, FileText, User, Calendar, Package, Clock } from "lucide-react"
+import type { ReviewRequest, ReviewDecision, ReviewStage } from "@/mocks/reviews"
 import { DOCUMENT_CONTENTS } from "@/mocks/document-contents"
 import { formatUpdatedAt, formatSizeBytes } from "@/lib/format"
 import { cn } from "@/lib/utils"
@@ -100,61 +100,26 @@ export function ReviewDetailDialogEnhanced({
             </div>
           )}
 
-          {/* Enhanced Review Result */}
-          {readOnly && review.review && (
-            <div
-              className={cn(
-                "overflow-hidden rounded-2xl border shadow-sm",
-                review.review.result === "approved"
-                  ? "border-green-300/50 bg-gradient-to-br from-green-50/80 to-emerald-50/50 dark:border-green-800/30 dark:from-green-950/30 dark:to-emerald-950/20"
-                  : "border-red-300/50 bg-gradient-to-br from-red-50/80 to-rose-50/50 dark:border-red-800/30 dark:from-red-950/30 dark:to-rose-950/20",
-              )}
-            >
-              <div className="flex items-center justify-between p-5">
-                <div className="flex items-center gap-3">
-                  <div
-                    className={cn(
-                      "flex size-10 items-center justify-center rounded-xl shadow-sm",
-                      review.review.result === "approved"
-                        ? "bg-green-600 text-white dark:bg-green-500"
-                        : "bg-red-600 text-white dark:bg-red-500",
-                    )}
-                  >
-                    {review.review.result === "approved" ? (
-                      <Check className="size-5" />
-                    ) : (
-                      <X className="size-5" />
-                    )}
+          {/* Enhanced Review Result（两级审核意见） */}
+          {readOnly &&
+            (review.firstReview ||
+              review.secondReview ||
+              review.skipFirstReview) && (
+              <div className="space-y-3">
+                {review.skipFirstReview ? (
+                  <div className="rounded-2xl border border-dashed border-border/50 bg-card/30 p-4 text-sm text-muted-foreground">
+                    提交人具备初审权限，本提交自动免初审，直接进入复审。
                   </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="font-serif text-base font-semibold">
-                        {review.review.result === "approved" ? "审核通过" : "审核驳回"}
-                      </span>
-                    </div>
-                    <div className="mt-0.5 text-xs text-muted-foreground">
-                      {review.review.reviewerName} · {formatUpdatedAt(review.review.reviewedAt)}
-                    </div>
-                  </div>
-                </div>
-                {review.appliedVersion != null && (
-                  <div className="rounded-lg bg-background/60 px-3 py-1.5 text-xs font-medium text-muted-foreground shadow-sm backdrop-blur-sm">
-                    版本 v{review.appliedVersion}
-                  </div>
+                ) : (
+                  <DecisionCard stage="first" decision={review.firstReview} />
                 )}
+                <DecisionCard
+                  stage="second"
+                  decision={review.secondReview}
+                  appliedVersion={review.appliedVersion}
+                />
               </div>
-              {review.review.reason && (
-                <div className="border-t border-border/30 bg-background/30 p-5">
-                  <div className="mb-1.5 text-xs font-medium text-muted-foreground">
-                    驳回原因
-                  </div>
-                  <div className="text-sm leading-relaxed">
-                    {review.review.reason}
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
+            )}
         </div>
 
         <DialogFooter>
@@ -346,6 +311,81 @@ function EmptyPane({ text }: { text: string }) {
   return (
     <div className="flex h-40 items-center justify-center text-sm text-muted-foreground">
       {text}
+    </div>
+  )
+}
+
+/** 单个审核环节的意见卡片（初审 / 复审） */
+function DecisionCard({
+  stage,
+  decision,
+  appliedVersion,
+}: {
+  stage: ReviewStage
+  decision?: ReviewDecision
+  appliedVersion?: number
+}) {
+  const stageLabel = stage === "first" ? "初审" : "复审"
+
+  if (!decision) {
+    return (
+      <div className="flex items-center gap-2 rounded-2xl border border-dashed border-border/50 bg-card/30 p-4 text-sm text-muted-foreground">
+        <Clock className="size-4" />
+        {stageLabel}：待处理
+      </div>
+    )
+  }
+
+  const approved = decision.result === "approved"
+  return (
+    <div
+      className={cn(
+        "overflow-hidden rounded-2xl border shadow-sm",
+        approved
+          ? "border-green-300/50 bg-gradient-to-br from-green-50/80 to-emerald-50/50 dark:border-green-800/30 dark:from-green-950/30 dark:to-emerald-950/20"
+          : "border-red-300/50 bg-gradient-to-br from-red-50/80 to-rose-50/50 dark:border-red-800/30 dark:from-red-950/30 dark:to-rose-950/20",
+      )}
+    >
+      <div className="flex items-center justify-between p-5">
+        <div className="flex items-center gap-3">
+          <div
+            className={cn(
+              "flex size-10 items-center justify-center rounded-xl shadow-sm",
+              approved
+                ? "bg-green-600 text-white dark:bg-green-500"
+                : "bg-red-600 text-white dark:bg-red-500",
+            )}
+          >
+            {approved ? <Check className="size-5" /> : <X className="size-5" />}
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="font-serif text-base font-semibold">
+                {stageLabel}
+                {approved ? "通过" : "驳回"}
+              </span>
+            </div>
+            <div className="mt-0.5 text-xs text-muted-foreground">
+              {decision.reviewerName}
+              {decision.reviewerIdNo && `(${decision.reviewerIdNo})`} ·{" "}
+              {formatUpdatedAt(decision.reviewedAt)}
+            </div>
+          </div>
+        </div>
+        {stage === "second" && approved && appliedVersion != null && (
+          <div className="rounded-lg bg-background/60 px-3 py-1.5 text-xs font-medium text-muted-foreground shadow-sm backdrop-blur-sm">
+            版本 v{appliedVersion}
+          </div>
+        )}
+      </div>
+      {decision.reason && (
+        <div className="border-t border-border/30 bg-background/30 p-5">
+          <div className="mb-1.5 text-xs font-medium text-muted-foreground">
+            驳回原因
+          </div>
+          <div className="text-sm leading-relaxed">{decision.reason}</div>
+        </div>
+      )}
     </div>
   )
 }

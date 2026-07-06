@@ -12,16 +12,19 @@ import { cn } from "@/lib/utils"
 import { RoleSwitcher } from "@/components/demo/role-switcher"
 import { DocumentsTab } from "./knowledge-detail/documents-tab"
 import { MySubmissionsTab } from "./knowledge-detail/my-submissions-tab"
-import { PendingReviewTab } from "./knowledge-detail/pending-review-tab"
+import { PendingFirstReviewTab } from "./knowledge-detail/pending-first-review-tab"
+import { PendingSecondReviewTab } from "./knowledge-detail/pending-second-review-tab"
 import { VersionHistoryTab } from "./knowledge-detail/version-history-tab"
 import { ReviewRecordsTab } from "./knowledge-detail/review-records-tab"
 import { AuditLogTab } from "./knowledge-detail/audit-log-tab"
 import { MembersTab } from "./knowledge-detail/members-tab"
+import { SubmitConfirmDialog } from "./knowledge-detail/submit-confirm-dialog"
 
 type TabKey =
   | "documents"
   | "my-submissions"
-  | "pending-review"
+  | "pending-first-review"
+  | "pending-second-review"
   | "versions"
   | "review-records"
   | "audit"
@@ -37,8 +40,9 @@ export default function KnowledgeDetailPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const kb = KNOWLEDGE_BASES.find((it) => it.id === id)
-  const { role, isOwner, canReview, canSubmit } = useKBRole(id)
+  const { role, isOwner, canFirstReview, canSecondReview, canSubmit, skipsFirstReview } = useKBRole(id)
   const [activeTab, setActiveTab] = useState<TabKey>("documents")
+  const [importOpen, setImportOpen] = useState(false)
 
   // 根据角色动态构建 Tab 列表
   const tabs: TabItem[] = [
@@ -46,9 +50,16 @@ export default function KnowledgeDetailPage() {
     ...(canSubmit
       ? [{ key: "my-submissions" as TabKey, label: "我的提交", badge: 0 }]
       : []),
-    ...(canReview
+    // 待初审 Tab（初审人及以上可见，包括创建者）
+    ...(canFirstReview
+      ? [{ key: "pending-first-review" as TabKey, label: "待初审", badge: 0 }]
+      : []),
+    // 待复审 Tab（仅复审人可见，创建者不显示）
+    ...(canSecondReview && !isOwner
+      ? [{ key: "pending-second-review" as TabKey, label: "待复审", badge: 0 }]
+      : []),
+    ...(canFirstReview || canSecondReview
       ? [
-          { key: "pending-review" as TabKey, label: "待审核", badge: 0 },
           { key: "versions" as TabKey, label: "版本记录" },
           { key: "review-records" as TabKey, label: "审核记录" },
           { key: "audit" as TabKey, label: "操作记录" },
@@ -62,11 +73,13 @@ export default function KnowledgeDetailPage() {
   const roleLabel =
     role === "owner"
       ? "创建者"
-      : role === "admin"
-        ? "管理员"
-        : role === "maintainer"
-          ? "维护人员"
-          : "无权限"
+      : role === "second_reviewer"
+        ? "复审人"
+        : role === "first_reviewer"
+          ? "初审人"
+          : role === "maintainer"
+            ? "维护人员"
+            : "无权限"
 
   return (
     <div className="flex h-full flex-col">
@@ -118,6 +131,7 @@ export default function KnowledgeDetailPage() {
           {canSubmit && (
             <button
               type="button"
+              onClick={() => setImportOpen(true)}
               className="inline-flex h-9 items-center gap-1.5 rounded-md bg-brand-500 px-4 text-sm font-medium text-white shadow-sm transition hover:bg-brand-600"
             >
               <Upload className="size-4" />
@@ -158,12 +172,30 @@ export default function KnowledgeDetailPage() {
       <div className="flex-1 overflow-auto">
         {activeTab === "documents" && <DocumentsTab kbId={id!} />}
         {activeTab === "my-submissions" && <MySubmissionsTab kbId={id!} />}
-        {activeTab === "pending-review" && <PendingReviewTab kbId={id!} />}
+        {activeTab === "pending-first-review" && <PendingFirstReviewTab kbId={id!} />}
+        {activeTab === "pending-second-review" && <PendingSecondReviewTab kbId={id!} />}
         {activeTab === "versions" && <VersionHistoryTab kbId={id!} />}
         {activeTab === "review-records" && <ReviewRecordsTab kbId={id!} />}
         {activeTab === "audit" && <AuditLogTab kbId={id!} />}
         {activeTab === "members" && <MembersTab kbId={id!} />}
       </div>
+
+      {/* 维护人员导入文件 → 提交新增审核 */}
+      {canSubmit && (
+        <SubmitConfirmDialog
+          open={importOpen}
+          onOpenChange={setImportOpen}
+          operation="add"
+          documentName="新导入的文件"
+          skipsFirstReview={skipsFirstReview}
+          onConfirm={(desc) => {
+            setImportOpen(false)
+            alert(
+              `已提交「新增文件」的审核申请。\n变更说明：${desc}\n\n可在「我的提交」中查看审批进度。`,
+            )
+          }}
+        />
+      )}
     </div>
   )
 }
