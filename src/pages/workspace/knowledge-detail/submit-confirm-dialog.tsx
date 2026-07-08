@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { Info, ShieldCheck } from "lucide-react"
+import { Info, ShieldCheck, AlertTriangle } from "lucide-react"
 import type { OperationType } from "@/mocks/reviews"
 import {
   Dialog,
@@ -8,6 +8,16 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
@@ -54,6 +64,7 @@ export function SubmitConfirmDialog({
 }: SubmitConfirmDialogProps) {
   const [description, setDescription] = useState("")
   const [error, setError] = useState(false)
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false)
 
   const handleConfirm = (directApprove?: boolean) => {
     if (!description.trim()) {
@@ -65,12 +76,20 @@ export function SubmitConfirmDialog({
     setError(false)
   }
 
-  const handleOpenChange = (next: boolean) => {
-    if (!next) {
-      setDescription("")
-      setError(false)
-    }
-    onOpenChange(next)
+  const handleCancel = () => {
+    // 无论是否填写内容，点击取消都显示二次确认
+    setShowCancelConfirm(true)
+  }
+
+  const handleConfirmCancel = () => {
+    setShowCancelConfirm(false)
+    handleClose()
+  }
+
+  const handleClose = () => {
+    setDescription("")
+    setError(false)
+    onOpenChange(false)
   }
 
   // 根据角色和配置生成提示文案
@@ -94,8 +113,21 @@ export function SubmitConfirmDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="max-w-md">
+    <>
+      <Dialog
+        open={open}
+        onOpenChange={(next) => {
+          // 阻止通过 ESC 键或点击遮罩关闭
+          if (!next) return
+          onOpenChange(next)
+        }}
+      >
+        <DialogContent
+          className="max-w-md"
+          showClose={false}
+          onPointerDownOutside={(e) => e.preventDefault()}
+          onEscapeKeyDown={(e) => e.preventDefault()}
+        >
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <ShieldCheck className="size-5 text-brand-600 dark:text-brand-400" />
@@ -153,7 +185,7 @@ export function SubmitConfirmDialog({
           {submitterRole === "first-reviewer" && hasSecondReviewer ? (
             // 初审人/创建者：两个按钮（提交复审、确定生效）
             <>
-              <Button variant="outline" onClick={() => handleOpenChange(false)}>
+              <Button variant="outline" onClick={handleCancel}>
                 取消
               </Button>
               <Button
@@ -174,7 +206,7 @@ export function SubmitConfirmDialog({
           ) : (
             // 复审人、维护人员、降级场景：单按钮
             <>
-              <Button variant="outline" onClick={() => handleOpenChange(false)}>
+              <Button variant="outline" onClick={handleCancel}>
                 取消
               </Button>
               <Button onClick={() => handleConfirm()}>
@@ -185,5 +217,32 @@ export function SubmitConfirmDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+
+    {/* 取消确认对话框 */}
+    <AlertDialog open={showCancelConfirm} onOpenChange={setShowCancelConfirm}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle className="flex items-center gap-2">
+            <AlertTriangle className="size-5 text-amber-600" />
+            确认退出
+          </AlertDialogTitle>
+          <AlertDialogDescription>
+            退出提交审核流程将不保存当前信息，确定要退出吗？
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel onClick={() => setShowCancelConfirm(false)}>
+            继续编辑
+          </AlertDialogCancel>
+          <AlertDialogAction
+            onClick={handleConfirmCancel}
+            className="bg-destructive hover:bg-destructive/90"
+          >
+            确认退出
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  </>
   )
 }

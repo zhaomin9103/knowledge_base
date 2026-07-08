@@ -101,14 +101,18 @@ This distinction is critical for:
 
 **Key Components**:
 - `documents-tab.tsx` - File list with update/delete operations
-- `my-submissions-tab.tsx` - **Role-differentiated display**: Pure second reviewers hide status columns, others show full review status including approved records (v4.0 change)
+- `my-submissions-tab.tsx` - **Role-differentiated display**: Pure second reviewers hide status columns, others show full review status including approved records
 - `pending-first-review-tab.tsx` - First review queue with 3-button action (approve & apply / approve & submit to second / reject)
 - `pending-second-review-tab.tsx` - Second review queue
-- `review-records-tab.tsx` - All review records including **in-review status** showing real reviewer names (v4.0 change)
-- `approval-timeline.tsx` - **Reusable approval flow timeline component** (v4.0 addition), used in flow dialog and detail dialog
+- `version-history-tab.tsx` - Version history with **date grouping** and **smart archival** (shows 50 recent versions)
+- `review-records-tab.tsx` - All review records including **in-review status** showing real reviewer names
+- `members-tab.tsx` - Member management with **search-based add member dialog**
+- `approval-timeline.tsx` - **Reusable approval flow timeline component**, used in flow dialog and detail dialog
 - `approval-flow-dialog.tsx` - Shows **dynamic approval nodes** (doesn't show second review node prematurely)
+- `submit-confirm-dialog.tsx` - Submit confirmation with **forced interaction mode** (no X button, mask/ESC disabled, cancel requires confirmation)
+- `add-member-dialog.tsx` - Member addition with search-first UI (empty by default, search to populate)
 
-### Approval Flow Timeline Logic (v4.0)
+### Approval Flow Timeline Logic
 
 The `ApprovalTimeline` component dynamically decides whether to show the second review node:
 
@@ -177,24 +181,27 @@ interface Props {
 
 ## Project Evolution
 
-**Current Version**: v4.0 (UI Optimization & Second Reviewer Direct Apply)
+**Current Version**: 1.0 (Production Ready)
 
-Key changes in v4.0:
-- Second reviewers' operations (import/update/delete) apply immediately without review dialogs
+Key features:
+- Four-role hierarchical permission system with multi-level review workflow
+- Second reviewers' operations apply immediately without review dialogs
 - Owner treated as first reviewer in "My Submissions" tab
-- "My Submissions" shows all records including approved ones
-- Review records show real reviewer names for in-review items
+- Document locking during review to prevent race conditions
+- Optimistic locking (version field) to prevent concurrent modifications
+- Version history with date grouping and smart archival (50 recent versions)
+- Member search in add-member dialog
+- Submit confirmation dialog with forced interaction mode (no X button, mask-click disabled, cancel requires confirmation)
+- Maintainer tab shows tip: "增删改操作需经审核后才会生效"
 - Approval timeline dynamically shows nodes (no premature second review node)
-- Detail dialog bottom includes approval timeline
-
-See `docs/CHANGELOG-v4.0.md` for full details.
 
 ## Important Files
 
-- `docs/PRD-知识库详情页.md` - Complete product requirements (v4.0)
-- `docs/HANDOVER.md` - Quick reference for core changes
+- `docs/PRD-知识库详情页.md` - Complete product requirements document (v1.0)
 - `src/hooks/use-kb-role.ts` - Role permission logic
-- `src/pages/workspace/knowledge-detail/approval-timeline.tsx` - Reusable approval flow component (v4.0)
+- `src/pages/workspace/knowledge-detail/approval-timeline.tsx` - Reusable approval flow component
+- `src/pages/workspace/knowledge-detail/submit-confirm-dialog.tsx` - Submit confirmation with forced interaction mode
+- `src/components/ui/alert-dialog.tsx` - Alert dialog for cancel confirmation
 - `src/mocks/reviews.ts` - Review workflow data (includes direct approval scenarios)
 
 ## Deployment

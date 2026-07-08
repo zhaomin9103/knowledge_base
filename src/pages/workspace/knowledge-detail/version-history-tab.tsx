@@ -211,22 +211,6 @@ export function VersionHistoryTab({ kbId }: VersionHistoryTabProps) {
           </div>
         )}
       </div>
-
-      {/* 回退确认弹窗 */}
-      {rollbackVersion && (
-        <RollbackDialog
-          targetVersion={rollbackVersion.version}
-          currentVersion={currentVersion}
-          open={!!rollbackVersion}
-          onOpenChange={(open) => !open && setRollbackVersion(null)}
-          onConfirm={() => {
-            alert(
-              `已回退到 v${rollbackVersion.version}\n\n注意：这是演示功能，真实环境需要重新解析文档并更新知识库索引。`,
-            )
-            setRollbackVersion(null)
-          }}
-        />
-      )}
     </div>
   )
 }
@@ -234,11 +218,9 @@ export function VersionHistoryTab({ kbId }: VersionHistoryTabProps) {
 interface VersionItemProps {
   version: KBVersion
   isCurrent: boolean
-  canRollback: boolean
-  onRollback: () => void
 }
 
-function VersionItem({ version, isCurrent, canRollback, onRollback }: VersionItemProps) {
+function VersionItem({ version, isCurrent }: VersionItemProps) {
   const isInit = version.operation === "init"
   const Icon = isInit ? Sparkles : GitCommitVertical
   const FileIcon = version.documentExt ? getFileIcon(version.documentExt) : null
@@ -304,18 +286,6 @@ function VersionItem({ version, isCurrent, canRollback, onRollback }: VersionIte
             )}
           </div>
         </div>
-
-        {canRollback && (
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={onRollback}
-            className="shrink-0"
-          >
-            <RotateCcw className="mr-1 size-3.5" />
-            回退到此版本
-          </Button>
-        )}
       </div>
     </div>
   )

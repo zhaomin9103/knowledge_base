@@ -140,7 +140,7 @@ export default function KnowledgeDetailPage() {
       </div>
 
       {/* Tab 导航 */}
-      <div className="mb-4 flex gap-1 border-b">
+      <div className="mb-4 flex items-center gap-1 border-b">
         {tabs.map((tab) => (
           <button
             key={tab.key}
@@ -164,6 +164,13 @@ export default function KnowledgeDetailPage() {
             ) : null}
           </button>
         ))}
+
+        {/* 维护人员提示语 */}
+        {role === "maintainer" && (
+          <span className="ml-auto pb-2 pr-2 text-sm" style={{ color: "#666666" }}>
+            增删改操作需经审核后才会生效
+          </span>
+        )}
       </div>
 
       {/* Tab 内容 */}
