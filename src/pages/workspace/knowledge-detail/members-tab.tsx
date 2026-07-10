@@ -3,6 +3,7 @@ import { Search, UserPlus, Trash2 } from "lucide-react"
 import { KNOWLEDGE_BASES } from "@/mocks/knowledge"
 import { MOCK_USERS, type User } from "@/mocks/users"
 import { getMemberJoinedAt } from "@/mocks/kb-members"
+import { REVIEW_REQUESTS } from "@/mocks/reviews"
 import { useAuth } from "@/hooks/use-auth"
 import type { KBRole } from "@/hooks/use-kb-role"
 import { formatUpdatedAt } from "@/lib/format"
@@ -202,6 +203,23 @@ export function MembersTab({ kbId }: MembersTabProps) {
     )
   }
 
+  // 计算成员的待审核数量（仅复审人受限）
+  //
+  // 初审人不受移除限制：创建者本身具备初审权限，移除某个初审人后
+  // 待初审任务仍可由创建者或其他初审人处理，不会卡死流程。
+  // 复审权限仅复审人持有（创建者不作纯复审），移除最后的复审人会
+  // 导致待复审任务无人处理，故仅对复审人统计待处理数量。
+  const getPendingReviewCount = (userId: string, role: KBRole) => {
+    if (role !== "second_reviewer") return 0
+
+    return REVIEW_REQUESTS.filter(
+      (r) =>
+        r.kbId === kbId &&
+        r.status === "pending_second" &&
+        secondReviewerIds.includes(userId),
+    ).length
+  }
+
   return (
     <div className="flex h-full flex-col gap-4">
       {/* 顶部统计 + 操作 */}
@@ -316,6 +334,10 @@ export function MembersTab({ kbId }: MembersTabProps) {
           memberRole={
             ASSIGNABLE_ROLE_LABEL[removeTarget.role as AssignableRole]
           }
+          pendingReviewCount={getPendingReviewCount(
+            removeTarget.user.id,
+            removeTarget.role
+          )}
           onConfirm={() => handleRemove(removeTarget)}
         />
       )}

@@ -43,6 +43,9 @@ The application implements a **4-role, 2-stage review workflow** for knowledge b
 3. **Owner ≠ Pure Second Reviewer**: Owners are treated as first reviewers in "My Submissions" tab to show full review process
 4. **Second reviewers' operations apply immediately**: No review dialogs, direct effect
 5. **Optimistic locking**: Each `ReviewRequest` has a `version` field to prevent concurrent modification
+6. **Owner submits like a first reviewer**: When a second reviewer is configured, owner's add/update/delete opens the submit dialog with the first-reviewer options (apply directly / submit to second review). When **no** second reviewer is configured, owner's operations apply immediately **without a dialog** (owner is the highest authority, no review stage to route to)
+7. **Change description is optional for first reviewer / owner**: The submit dialog's change-description field is optional for `first-reviewer` role (label shows "(选填)"), and required for maintainer / second reviewer
+8. **Member removal — only second reviewers are gated**: A second reviewer with outstanding `pending_second` requests cannot be removed (dialog blocks with a hint). First reviewers are **never** gated by pending reviews — the owner holds first-review authority, so pending first-review tasks can always be handled after removal, whereas second-review authority is held only by second reviewers
 
 ### Data Model
 
@@ -106,10 +109,10 @@ This distinction is critical for:
 - `pending-second-review-tab.tsx` - Second review queue
 - `version-history-tab.tsx` - Version history with **date grouping** and **smart archival** (shows 50 recent versions)
 - `review-records-tab.tsx` - All review records including **in-review status** showing real reviewer names
-- `members-tab.tsx` - Member management with **search-based add member dialog**
+- `members-tab.tsx` - Member management with **search-based add member dialog**; `getPendingReviewCount` gates removal for **second reviewers only** (returns 0 for all other roles)
 - `approval-timeline.tsx` - **Reusable approval flow timeline component**, used in flow dialog and detail dialog
 - `approval-flow-dialog.tsx` - Shows **dynamic approval nodes** (doesn't show second review node prematurely)
-- `submit-confirm-dialog.tsx` - Submit confirmation with **forced interaction mode** (no X button, mask/ESC disabled, cancel requires confirmation)
+- `submit-confirm-dialog.tsx` - Submit confirmation with **forced interaction mode** (no X button, mask/ESC disabled, cancel requires confirmation). Title is "提交{新增/更新/删除}" (no "申请"), **no operation-target filename shown**, change description **optional for first-reviewer / owner**, and role-specific prompt text (maintainer/first-reviewer show prompt without a heading label)
 - `add-member-dialog.tsx` - Member addition with search-first UI (empty by default, search to populate)
 
 ### Approval Flow Timeline Logic
@@ -203,6 +206,7 @@ Key features:
 - `src/pages/workspace/knowledge-detail/submit-confirm-dialog.tsx` - Submit confirmation with forced interaction mode
 - `src/components/ui/alert-dialog.tsx` - Alert dialog for cancel confirmation
 - `src/mocks/reviews.ts` - Review workflow data (includes direct approval scenarios)
+- `src/lib/file-icon.tsx` - `<FileIcon>` component (取图标+颜色+渲染 unified), used by all file lists/dialogs
 
 ## Deployment
 

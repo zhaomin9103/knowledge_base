@@ -3,7 +3,7 @@ import { GitCommitVertical, Sparkles, CheckCircle2, ChevronDown, ChevronRight, A
 import { getVersions, type KBVersion } from "@/mocks/versions"
 import { KNOWLEDGE_BASES } from "@/mocks/knowledge"
 import { formatUpdatedAt } from "@/lib/format"
-import { getFileIcon, getFileIconColor } from "@/lib/file-icon"
+import { FileIcon } from "@/lib/file-icon"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { OperationBadge } from "./operation-badge"
@@ -72,7 +72,14 @@ function groupVersionsByDate(versions: KBVersion[]): VersionGroup[] {
 export function VersionHistoryTab({ kbId }: VersionHistoryTabProps) {
   const kb = KNOWLEDGE_BASES.find((k) => k.id === kbId)
   const [showArchive, setShowArchive] = useState(false)
-  const [expandedDates, setExpandedDates] = useState<Set<string>>(new Set())
+  // 初始展开今天和昨天（在初始化函数内计算，避免在 useMemo 中调用 setState）
+  const [expandedDates, setExpandedDates] = useState<Set<string>>(() => {
+    const today = new Date().toISOString().split("T")[0]
+    const yesterday = new Date(Date.now() - 86400000)
+      .toISOString()
+      .split("T")[0]
+    return new Set([today, yesterday])
+  })
 
   const allVersions = useMemo(() => {
     const versions = getVersions(kbId)
@@ -92,13 +99,6 @@ export function VersionHistoryTab({ kbId }: VersionHistoryTabProps) {
   const versionGroups = useMemo(() => {
     return groupVersionsByDate(displayVersions)
   }, [displayVersions])
-
-  // 初始化展开状态：展开今天和昨天
-  useMemo(() => {
-    const today = new Date().toISOString().split("T")[0]
-    const yesterday = new Date(Date.now() - 86400000).toISOString().split("T")[0]
-    setExpandedDates(new Set([today, yesterday]))
-  }, [])
 
   const toggleDateExpand = (date: string) => {
     setExpandedDates((prev) => {
@@ -223,8 +223,6 @@ interface VersionItemProps {
 function VersionItem({ version, isCurrent }: VersionItemProps) {
   const isInit = version.operation === "init"
   const Icon = isInit ? Sparkles : GitCommitVertical
-  const FileIcon = version.documentExt ? getFileIcon(version.documentExt) : null
-  const fileIconColor = version.documentExt ? getFileIconColor(version.documentExt) : ""
 
   return (
     <div className={cn("group p-4 transition", isCurrent && "bg-brand-50/50 dark:bg-brand-950/20")}>
@@ -266,7 +264,9 @@ function VersionItem({ version, isCurrent }: VersionItemProps) {
           {/* 文档名称 */}
           {version.documentName && (
             <div className="mt-1 flex items-center gap-2">
-              {FileIcon && <FileIcon className={cn("size-4", fileIconColor)} />}
+              {version.documentExt && (
+                <FileIcon ext={version.documentExt} className="size-4" />
+              )}
               <span className="truncate font-medium text-foreground">{version.documentName}</span>
             </div>
           )}

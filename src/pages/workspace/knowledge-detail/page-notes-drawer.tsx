@@ -1,10 +1,20 @@
-import { useEffect, useState } from "react"
+import { useState } from "react"
 import * as DialogPrimitive from "@radix-ui/react-dialog"
 import { NotebookPen, Pencil, RotateCcw, Save, X } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 
 const STORAGE_PREFIX = "kb-page-notes:"
+
+/** 从 localStorage 读取已保存的备注，读取失败或无记录时回退到默认内容 */
+function readStoredNote(storageKey: string, fallback: string): string {
+  try {
+    return localStorage.getItem(storageKey) ?? fallback
+  } catch {
+    // localStorage 不可用时忽略，使用默认内容
+    return fallback
+  }
+}
 
 interface PageNotesDrawerProps {
   /** 唯一存储键，区分不同 Tab 的备注 */
@@ -31,21 +41,11 @@ export function PageNotesDrawer({
 
   const [open, setOpen] = useState(false)
   const [editing, setEditing] = useState(false)
-  const [content, setContent] = useState(defaultContent)
-  const [draft, setDraft] = useState(defaultContent)
-
-  // 首次挂载时从 localStorage 读取已保存的备注
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem(storageKey)
-      if (saved != null) {
-        setContent(saved)
-        setDraft(saved)
-      }
-    } catch {
-      // localStorage 不可用时忽略，使用默认内容
-    }
-  }, [storageKey])
+  // 初始值直接从 localStorage 读取，避免挂载后再 setState 触发额外渲染
+  const [content, setContent] = useState(() =>
+    readStoredNote(storageKey, defaultContent),
+  )
+  const [draft, setDraft] = useState(content)
 
   const handleStartEdit = () => {
     setDraft(content)

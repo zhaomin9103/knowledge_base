@@ -3,8 +3,7 @@ import { Inbox, Users } from "lucide-react"
 import { OPERATION_LOGS, type OperationLog } from "@/mocks/operations"
 import { REVIEW_REQUESTS, type ReviewRequest } from "@/mocks/reviews"
 import { formatUpdatedAt } from "@/lib/format"
-import { getFileIcon, getFileIconColor } from "@/lib/file-icon"
-import { cn } from "@/lib/utils"
+import { FileIcon } from "@/lib/file-icon"
 import { ActionBadge } from "./action-badge"
 import { DocumentPreviewDialog } from "./document-preview-dialog"
 import { PageNotesDrawer } from "./page-notes-drawer"
@@ -188,13 +187,11 @@ function TargetCell({
   }
 
   // document：可点击预览
-  const Icon = getFileIcon(log.target.ext ?? "")
-  const iconColor = getFileIconColor(log.target.ext ?? "")
   const canPreview = !!log.reviewRequestId
 
   const inner = (
     <>
-      <Icon className={cn("size-4 shrink-0", iconColor)} />
+      <FileIcon ext={log.target.ext ?? ""} className="size-4 shrink-0" />
       <span className="truncate text-foreground">{log.target.name}</span>
     </>
   )

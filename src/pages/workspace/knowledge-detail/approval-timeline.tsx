@@ -3,10 +3,11 @@ import type { ReviewRequest } from "@/mocks/reviews"
 import { formatUpdatedAt } from "@/lib/format"
 import { cn } from "@/lib/utils"
 
-export interface TimelineNode {
+interface TimelineNode {
   key: string
   title: string
   actor: string
+  actorIdNo?: string // 操作人工号（用于已完成节点的详细信息展示）
   organization?: string
   timestamp: string
   state: "done" | "current" | "rejected" | "waiting"
@@ -14,12 +15,13 @@ export interface TimelineNode {
 }
 
 /** 根据审核记录构建审批流时间线节点 */
-export function buildTimeline(review: ReviewRequest): TimelineNode[] {
+function buildTimeline(review: ReviewRequest): TimelineNode[] {
   const nodes: TimelineNode[] = [
     {
       key: "submit",
       title: "提交申请",
       actor: review.submitter.name,
+      actorIdNo: review.submitter.idNo,
       organization: review.submitter.organization,
       timestamp: review.createdAt,
       state: "done",
@@ -58,6 +60,7 @@ export function buildTimeline(review: ReviewRequest): TimelineNode[] {
       key: "first",
       title: firstTitle,
       actor: fr.reviewerName,
+      actorIdNo: fr.reviewerIdNo,
       timestamp: fr.reviewedAt,
       state: fr.result === "approved" ? "done" : "rejected",
       description: firstDesc,
@@ -89,6 +92,7 @@ export function buildTimeline(review: ReviewRequest): TimelineNode[] {
         key: "second",
         title: sr.result === "approved" ? "复审通过" : "复审驳回",
         actor: sr.reviewerName,
+        actorIdNo: sr.reviewerIdNo,
         timestamp: sr.reviewedAt,
         state: sr.result === "approved" ? "done" : "rejected",
         description:
@@ -175,6 +179,12 @@ function TimelineItem({ node, isLast }: { node: TimelineNode; isLast: boolean })
         </div>
         <div className="mt-0.5 text-xs text-muted-foreground">
           {node.actor}
+          {node.actorIdNo && (
+            <>
+              <span className="mx-1 opacity-60">·</span>
+              工号 {node.actorIdNo}
+            </>
+          )}
           {node.organization && (
             <>
               <span className="mx-1 opacity-60">·</span>

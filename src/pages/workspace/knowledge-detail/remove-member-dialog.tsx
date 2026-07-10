@@ -13,6 +13,7 @@ interface RemoveMemberDialogProps {
   onOpenChange: (open: boolean) => void
   memberName: string
   memberRole: string
+  pendingReviewCount?: number  // 新增：待处理审核数量
   onConfirm: () => void
 }
 
@@ -21,8 +22,11 @@ export function RemoveMemberDialog({
   onOpenChange,
   memberName,
   memberRole,
+  pendingReviewCount = 0,
   onConfirm,
 }: RemoveMemberDialogProps) {
+  const hasPendingReviews = pendingReviewCount > 0
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
@@ -34,31 +38,52 @@ export function RemoveMemberDialog({
         </DialogHeader>
 
         <div className="text-sm">
-          <p>
-            确定将
-            <span className="mx-1 font-medium text-foreground">
-              {memberName}
-            </span>
-            （{memberRole}）从该知识库移除？
-          </p>
-          <p className="mt-2 text-muted-foreground">
-            移除后，该成员将无法继续访问此知识库及相关操作。已生效的提交记录会保留。
-          </p>
+          {hasPendingReviews ? (
+            // 有待处理审核时的警告
+            <>
+              <p className="text-destructive">
+                无法移除
+                <span className="mx-1 font-medium">
+                  {memberName}
+                </span>
+                （{memberRole}）
+              </p>
+              <p className="mt-2 text-muted-foreground">
+                当前有待复审任务，请等待复审完成或添加新的复审人员后再尝试
+              </p>
+            </>
+          ) : (
+            // 正常移除提示
+            <>
+              <p>
+                确定将
+                <span className="mx-1 font-medium text-foreground">
+                  {memberName}
+                </span>
+                （{memberRole}）从该知识库移除？
+              </p>
+              <p className="mt-2 text-muted-foreground">
+                移除后，该成员将无法继续访问此知识库及相关操作。已生效的提交记录会保留。
+              </p>
+            </>
+          )}
         </div>
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
-            取消
+            {hasPendingReviews ? "知道了" : "取消"}
           </Button>
-          <Button
-            variant="destructive"
-            onClick={() => {
-              onConfirm()
-              onOpenChange(false)
-            }}
-          >
-            确认移除
-          </Button>
+          {!hasPendingReviews && (
+            <Button
+              variant="destructive"
+              onClick={() => {
+                onConfirm()
+                onOpenChange(false)
+              }}
+            >
+              确认移除
+            </Button>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>

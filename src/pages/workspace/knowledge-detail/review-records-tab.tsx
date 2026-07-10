@@ -10,8 +10,7 @@ import {
 import { KNOWLEDGE_BASES } from "@/mocks/knowledge"
 import { MOCK_USERS } from "@/mocks/users"
 import { formatUpdatedAt, formatSizeBytes } from "@/lib/format"
-import { getFileIcon, getFileIconColor } from "@/lib/file-icon"
-import { cn } from "@/lib/utils"
+import { FileIcon } from "@/lib/file-icon"
 import { Button } from "@/components/ui/button"
 import { OperationBadge } from "./operation-badge"
 import { ReviewResultBadge } from "./review-result-badge"
@@ -212,8 +211,6 @@ interface RecordRowProps {
 }
 
 function RecordRow({ record, onViewDetail, onPreviewDocument }: RecordRowProps) {
-  const Icon = getFileIcon(record.documentExt)
-  const iconColor = getFileIconColor(record.documentExt)
   const { decision, settledAt } = settledInfo(record)
 
   // 获取审核人信息（审核中显示当前应审核人，已审结显示实际审核人）
@@ -255,7 +252,7 @@ function RecordRow({ record, onViewDetail, onPreviewDocument }: RecordRowProps) 
           onClick={onPreviewDocument}
           className="flex max-w-xs items-center gap-2 text-left transition hover:text-brand-600 dark:hover:text-brand-400"
         >
-          <Icon className={cn("size-4 shrink-0", iconColor)} />
+          <FileIcon ext={record.documentExt} className="size-4 shrink-0" />
           <div className="min-w-0 flex-1">
             <div className="truncate text-foreground">
               {record.documentName}

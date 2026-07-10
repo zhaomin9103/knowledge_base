@@ -26,6 +26,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   )
 }
 
+// hook 与 Provider 同文件是 React Context 的惯例写法
+// eslint-disable-next-line react-refresh/only-export-components
 export function useAuth() {
   const ctx = useContext(AuthContext)
   if (!ctx) throw new Error("useAuth must be used within AuthProvider")

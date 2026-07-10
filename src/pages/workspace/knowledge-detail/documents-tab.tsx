@@ -13,7 +13,7 @@ import { KNOWLEDGE_BASES } from "@/mocks/knowledge"
 import type { OperationType } from "@/mocks/reviews"
 import { useKBRole } from "@/hooks/use-kb-role"
 import { formatSizeBytes, formatUpdatedAt } from "@/lib/format"
-import { getFileIcon, getFileIconColor } from "@/lib/file-icon"
+import { FileIcon } from "@/lib/file-icon"
 import { cn } from "@/lib/utils"
 import {
   DropdownMenu,
@@ -38,9 +38,15 @@ export function DocumentsTab({ kbId }: DocumentsTabProps) {
   const [keyword, setKeyword] = useState("")
   const { canSubmit, canFirstReview, canSecondReview, isOwner } = useKBRole(kbId)
   const kb = KNOWLEDGE_BASES.find((k) => k.id === kbId)
-  // 维护人员 / 初审人的增删改需走审核；创建者 / 纯复审人可直接操作
+  const hasSecondReviewer = (kb?.secondReviewerIds?.length ?? 0) > 0
+  // 纯复审人的操作直接生效，无需弹窗
   const isPureSecondReviewer = canSecondReview && !isOwner
-  const needsReview = canSubmit && !isOwner && !isPureSecondReviewer
+  // 创建者：配置了复审人时走提交弹窗（可选直接生效/提交复审），未配置时直接生效
+  const ownerNeedsDialog = isOwner && hasSecondReviewer
+  // 维护人员 / 初审人的增删改需走审核弹窗
+  const maintainerNeedsReview = canSubmit && !isOwner && !isPureSecondReviewer
+  // 是否需要弹出提交确认弹窗（用于拦截行内的增删改操作）
+  const needsReview = maintainerNeedsReview || ownerNeedsDialog
   const [pendingOp, setPendingOp] = useState<PendingOperation | null>(null)
 
   const filtered = keyword.trim()
@@ -69,7 +75,10 @@ export function DocumentsTab({ kbId }: DocumentsTabProps) {
     alert(`重命名: ${doc.name}`)
   }
 
-  const handleConfirmSubmit = (changeDescription: string) => {
+  const handleConfirmSubmit = (
+    changeDescription: string,
+    directApprove?: boolean,
+  ) => {
     if (!pendingOp) return
     // 演示：真实环境会向 REVIEW_REQUESTS 写入一条 pending_first 记录
     const verb =
@@ -78,10 +87,21 @@ export function DocumentsTab({ kbId }: DocumentsTabProps) {
         : pendingOp.operation === "update"
           ? "更新"
           : "新增"
+    const docName = pendingOp.doc.name
+    // 创建者选择「直接生效」时，操作立即应用到本地列表
+    if (directApprove && pendingOp.operation === "delete") {
+      setDocs((prev) => prev.filter((d) => d.id !== pendingOp.doc.id))
+    }
     setPendingOp(null)
-    alert(
-      `已提交「${verb}：${pendingOp.doc.name}」的审核申请。\n变更说明：${changeDescription}\n\n可在「我的提交」中查看审批进度。`,
-    )
+    if (directApprove) {
+      alert(
+        `已提交「${verb}：${docName}」申请并直接生效。\n变更说明：${changeDescription}\n\n可在「我的提交」中查看记录。`,
+      )
+    } else {
+      alert(
+        `已提交「${verb}：${docName}」的审核申请。\n变更说明：${changeDescription}\n\n可在「我的提交」中查看审批进度。`,
+      )
+    }
   }
 
   return (
@@ -161,15 +181,8 @@ export function DocumentsTab({ kbId }: DocumentsTabProps) {
           open={!!pendingOp}
           onOpenChange={(open) => !open && setPendingOp(null)}
           operation={pendingOp.operation}
-          documentName={pendingOp.doc.name}
-          submitterRole={
-            canSecondReview
-              ? "second-reviewer"
-              : canFirstReview
-                ? "first-reviewer"
-                : "maintainer"
-          }
-          hasSecondReviewer={(kb?.secondReviewerIds?.length ?? 0) > 0}
+          submitterRole={canFirstReview ? "first-reviewer" : "maintainer"}
+          hasSecondReviewer={hasSecondReviewer}
           onConfirm={handleConfirmSubmit}
         />
       )}
@@ -185,14 +198,11 @@ interface DocumentRowProps {
 }
 
 function DocumentRow({ doc, needsReview, onDelete, onEdit }: DocumentRowProps) {
-  const Icon = getFileIcon(doc.ext)
-  const iconColor = getFileIconColor(doc.ext)
-
   return (
     <tr className="group border-b transition hover:bg-muted/30">
       <td className="px-4 py-3">
         <div className="flex items-center gap-3">
-          <Icon className={cn("size-5 shrink-0", iconColor)} />
+          <FileIcon ext={doc.ext} className="size-5 shrink-0" />
           <div className="min-w-0 flex-1">
             <div className="truncate font-medium text-foreground">
               {doc.name}

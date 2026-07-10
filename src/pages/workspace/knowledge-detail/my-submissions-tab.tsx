@@ -8,7 +8,7 @@ import {
 import { useAuth } from "@/hooks/use-auth"
 import { useKBRole } from "@/hooks/use-kb-role"
 import { formatUpdatedAt, formatSizeBytes } from "@/lib/format"
-import { getFileIcon, getFileIconColor } from "@/lib/file-icon"
+import { FileIcon } from "@/lib/file-icon"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { OperationBadge } from "./operation-badge"
@@ -241,8 +241,6 @@ function SubmissionRow({
   onPreviewDocument,
   onViewFlow,
 }: SubmissionRowProps) {
-  const Icon = getFileIcon(review.documentExt)
-  const iconColor = getFileIconColor(review.documentExt)
   const rejectedReason = getRejectedDecision(review)?.reason
 
   return (
@@ -259,7 +257,7 @@ function SubmissionRow({
           onClick={onPreviewDocument}
           className="flex max-w-sm items-center gap-2 text-left transition hover:text-brand-600 dark:hover:text-brand-400"
         >
-          <Icon className={cn("size-4 shrink-0", iconColor)} />
+          <FileIcon ext={review.documentExt} className="size-4 shrink-0" />
           <div className="min-w-0 flex-1">
             <div className="truncate text-foreground">{review.documentName}</div>
             {review.fileSizeBytes && (

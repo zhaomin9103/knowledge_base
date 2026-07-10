@@ -54,4 +54,6 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
 )
 Button.displayName = "Button"
 
+// buttonVariants 为 cva 生成的样式函数，需与 Button 同文件导出（shadcn/ui 标准写法）
+// eslint-disable-next-line react-refresh/only-export-components
 export { Button, buttonVariants }

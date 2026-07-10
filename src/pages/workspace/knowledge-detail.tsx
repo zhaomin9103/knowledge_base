@@ -41,6 +41,7 @@ export default function KnowledgeDetailPage() {
   const navigate = useNavigate()
   const kb = KNOWLEDGE_BASES.find((it) => it.id === id)
   const { role, isOwner, canFirstReview, canSecondReview, canSubmit, isSecondReviewer } = useKBRole(id)
+  const hasSecondReviewer = (kb?.secondReviewerIds?.length ?? 0) > 0
   const [activeTab, setActiveTab] = useState<TabKey>("documents")
   const [importOpen, setImportOpen] = useState(false)
 
@@ -124,7 +125,8 @@ export default function KnowledgeDetailPage() {
               type="button"
               onClick={() => {
                 // 纯复审人操作直接生效，无需弹窗
-                if (isSecondReviewer && !isOwner) {
+                // 创建者在未配置复审人时也直接生效，无需弹窗
+                if ((isSecondReviewer && !isOwner) || (isOwner && !hasSecondReviewer)) {
                   alert("已导入文件并直接生效。\n\n可在「文件」Tab 中查看。")
                 } else {
                   setImportOpen(true)
@@ -191,20 +193,15 @@ export default function KnowledgeDetailPage() {
           open={importOpen}
           onOpenChange={setImportOpen}
           operation="add"
-          documentName="新导入的文件"
           submitterRole={
-            canSecondReview
-              ? "second-reviewer"
-              : canFirstReview
-                ? "first-reviewer"
-                : "maintainer"
+            canFirstReview
+              ? "first-reviewer"
+              : "maintainer"
           }
-          hasSecondReviewer={(kb?.secondReviewerIds?.length ?? 0) > 0}
+          hasSecondReviewer={hasSecondReviewer}
           onConfirm={(desc, directApprove) => {
             setImportOpen(false)
-            if (canSecondReview) {
-              alert(`已导入文件并生成新版本。\n变更说明：${desc}`)
-            } else if (directApprove) {
+            if (directApprove) {
               alert(
                 `已提交「新增文件」申请并直接生效。\n变更说明：${desc}\n\n可在「我的提交」中查看记录。`,
               )

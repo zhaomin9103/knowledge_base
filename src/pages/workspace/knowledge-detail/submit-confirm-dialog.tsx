@@ -21,13 +21,11 @@ import {
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
-import { OperationBadge } from "./operation-badge"
 
 interface SubmitConfirmDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   operation: OperationType
-  documentName: string
   /**
    * 提交人角色类型
    * - second-reviewer: 复审人（直接生效，只需备注）
@@ -57,7 +55,6 @@ export function SubmitConfirmDialog({
   open,
   onOpenChange,
   operation,
-  documentName,
   submitterRole,
   hasSecondReviewer = true,
   onConfirm,
@@ -66,8 +63,11 @@ export function SubmitConfirmDialog({
   const [error, setError] = useState(false)
   const [showCancelConfirm, setShowCancelConfirm] = useState(false)
 
+  // 创建者/初审人的变更说明为选填，其余角色必填
+  const isDescriptionRequired = submitterRole !== "first-reviewer"
+
   const handleConfirm = (directApprove?: boolean) => {
-    if (!description.trim()) {
+    if (isDescriptionRequired && !description.trim()) {
       setError(true)
       return
     }
@@ -102,14 +102,11 @@ export function SubmitConfirmDialog({
       if (!hasSecondReviewer) {
         return "您的本次操作将直接生效（当前知识库未配置复审人）。"
       }
-      return "您的本次操作需选择提交复审或直接生效。"
+      return "您可选择本次操作直接生效或提交复审人进行审核"
     }
 
     // maintainer
-    if (!hasSecondReviewer) {
-      return "您的本次操作将提交审核，需经初审人审核通过后生效（当前知识库未配置复审人）。"
-    }
-    return "您的本次操作将提交审核，需经初审人审核（初审人可选择直接生效或提交复审）。"
+    return "您的本次操作将在审核通过后生效"
   }
 
   return (
@@ -133,7 +130,7 @@ export function SubmitConfirmDialog({
             <ShieldCheck className="size-5 text-brand-600 dark:text-brand-400" />
             {submitterRole === "second-reviewer"
               ? `确认${OPERATION_VERB[operation]}`
-              : `提交${OPERATION_VERB[operation]}申请`}
+              : `提交${OPERATION_VERB[operation]}`}
           </DialogTitle>
         </DialogHeader>
 
@@ -142,31 +139,38 @@ export function SubmitConfirmDialog({
           <div className="flex gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300">
             <Info className="mt-0.5 size-4 shrink-0" />
             <div>
-              <p className="font-medium">
-                {submitterRole === "second-reviewer" ? "操作说明" : "审核说明"}
-              </p>
-              <p className="mt-1 text-xs leading-relaxed">
+              {submitterRole === "second-reviewer" && (
+                <p className="font-medium">操作说明</p>
+              )}
+              <p
+                className={
+                  submitterRole === "second-reviewer"
+                    ? "mt-1 text-xs leading-relaxed"
+                    : "text-sm leading-relaxed"
+                }
+              >
                 {getPromptText()}
               </p>
             </div>
           </div>
 
-          {/* 操作对象 */}
-          <div className="flex items-center gap-2 rounded-lg border bg-muted/30 p-3 text-sm">
-            <OperationBadge operation={operation} />
-            <span className="truncate font-medium text-foreground">
-              {documentName}
-            </span>
-          </div>
-
           {/* 变更说明输入 */}
           <div className="space-y-2">
             <Label htmlFor="change-desc" className="text-sm font-medium">
-              变更说明 <span className="text-destructive">*</span>
+              变更说明{" "}
+              {isDescriptionRequired ? (
+                <span className="text-destructive">*</span>
+              ) : (
+                <span className="text-xs font-normal text-muted-foreground">
+                  (选填)
+                </span>
+              )}
             </Label>
             <Textarea
               id="change-desc"
-              placeholder={`请简要说明本次${OPERATION_VERB[operation]}的原因或内容（必填）`}
+              placeholder={`请简要说明本次${OPERATION_VERB[operation]}的原因或内容（${
+                isDescriptionRequired ? "必填" : "选填"
+              }）`}
               value={description}
               onChange={(e) => {
                 setDescription(e.target.value)

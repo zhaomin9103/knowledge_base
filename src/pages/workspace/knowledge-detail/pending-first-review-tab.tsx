@@ -9,8 +9,7 @@ import {
 import { KNOWLEDGE_BASES } from "@/mocks/knowledge"
 import { useAuth } from "@/hooks/use-auth"
 import { formatUpdatedAt, formatSizeBytes } from "@/lib/format"
-import { getFileIcon, getFileIconColor } from "@/lib/file-icon"
-import { cn } from "@/lib/utils"
+import { FileIcon } from "@/lib/file-icon"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -151,11 +150,10 @@ export function PendingFirstReviewTab({ kbId }: PendingFirstReviewTabProps) {
                       onClick={() => setPreviewReview(review)}
                       className="flex items-center gap-2 text-left transition hover:text-brand-600"
                     >
-                      {(() => {
-                        const Icon = getFileIcon(review.documentExt)
-                        const color = getFileIconColor(review.documentExt)
-                        return <Icon className={cn("size-4 shrink-0", color)} />
-                      })()}
+                      <FileIcon
+                        ext={review.documentExt}
+                        className="size-4 shrink-0"
+                      />
                       <div className="min-w-0">
                         <p className="truncate font-medium">{review.documentName}</p>
                         {review.fileSizeBytes && (

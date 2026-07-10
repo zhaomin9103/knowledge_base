@@ -2,8 +2,7 @@ import { FileText } from "lucide-react"
 import type { ReviewRequest } from "@/mocks/reviews"
 import { DOCUMENT_CONTENTS } from "@/mocks/document-contents"
 import { formatSizeBytes } from "@/lib/format"
-import { getFileIcon, getFileIconColor } from "@/lib/file-icon"
-import { cn } from "@/lib/utils"
+import { FileIcon } from "@/lib/file-icon"
 import {
   Dialog,
   DialogContent,
@@ -41,15 +40,13 @@ export function DocumentPreviewDialog({
   onOpenChange,
 }: DocumentPreviewDialogProps) {
   const content = resolvePreviewContent(review)
-  const Icon = getFileIcon(review.documentExt)
-  const iconColor = getFileIconColor(review.documentExt)
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="flex max-h-[85vh] max-w-3xl flex-col overflow-hidden">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Icon className={cn("size-5", iconColor)} />
+            <FileIcon ext={review.documentExt} className="size-5" />
             <span className="truncate">{review.documentName}</span>
           </DialogTitle>
         </DialogHeader>

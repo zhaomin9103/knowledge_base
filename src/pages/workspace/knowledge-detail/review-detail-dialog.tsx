@@ -112,16 +112,14 @@ export function ReviewDetailDialog({
             </div>
           )}
 
-          {/* 审批流时间线（只读模式底部展示） */}
-          {readOnly && (
-            <div>
-              <h3 className="mb-3 flex items-center gap-2 text-sm font-medium">
-                <Clock className="size-4" />
-                审批流
-              </h3>
-              <ApprovalTimeline review={review} />
-            </div>
-          )}
+          {/* 审批流时间线（弹窗底部展示，只读与操作模式均显示，已完成节点含操作人姓名+工号） */}
+          <div>
+            <h3 className="mb-3 flex items-center gap-2 text-sm font-medium">
+              <Clock className="size-4" />
+              审批流
+            </h3>
+            <ApprovalTimeline review={review} />
+          </div>
         </div>
 
         <DialogFooter>

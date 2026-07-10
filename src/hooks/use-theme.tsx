@@ -39,6 +39,8 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   )
 }
 
+// hook 与 Provider 同文件是 React Context 的惯例写法
+// eslint-disable-next-line react-refresh/only-export-components
 export function useTheme() {
   const ctx = useContext(ThemeContext)
   if (!ctx) throw new Error("useTheme must be used within ThemeProvider")
